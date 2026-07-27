@@ -1,5 +1,11 @@
 import { nanoid } from "nanoid";
-import type { ResearchControl, ResearchEvent, ResearchMode } from "../../shared/report";
+import type {
+  Location,
+  ResearchControl,
+  ResearchEvent,
+  ResearchMode,
+  SeedAssumption,
+} from "../../shared/report";
 import { runResearch } from "./pipeline";
 
 /**
@@ -41,6 +47,10 @@ export type StartSessionInput = {
   readonly mode: ResearchMode;
   readonly sessionId?: string;
   readonly deviceId?: string;
+  /** Coarse buyer location resolved by the route (geo header or user input). */
+  readonly location?: Location | null;
+  /** User-edited assumptions carried from a prior report (M3 re-run with changes). */
+  readonly seedAssumptions?: readonly SeedAssumption[];
 };
 
 /** Starts the pipeline asynchronously; returns the researchId immediately. */

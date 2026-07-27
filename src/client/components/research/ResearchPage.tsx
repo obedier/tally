@@ -5,7 +5,15 @@ import {
   type HoursSaved,
   type Report,
   type ResearchMode,
+  type SeedAssumption,
 } from "../../../shared/report";
+
+/** Shape of a single assumption edit carried in router nav state from a report. */
+interface AssumptionEditNav {
+  id: string;
+  text: string;
+  affirmed: boolean;
+}
 import { track } from "../../lib/telemetry";
 import { ErrorState, PageTop } from "../ui/States";
 import { AssumptionsPanel } from "./AssumptionsPanel";
@@ -52,10 +60,19 @@ export function ResearchPage() {
   const location = useLocation();
   const query = (params.get("q") ?? "").trim();
   const rid = params.get("rid");
+  const locationParam = params.get("location")?.trim() || undefined;
   const modeParse = ResearchModeSchema.safeParse(params.get("mode"));
   // Unknown/tampered mode falls back to the CHEAPEST tier, never the most expensive.
   const mode: ResearchMode = modeParse.success ? modeParse.data : "quick";
   const [attempt, setAttempt] = useState(0);
+
+  // Assumption edits carried from a report's "re-run with my changes" arrive in
+  // router nav state (lost on hard reload, which is fine: they're only needed at
+  // POST time, before any reconnect). Seeded by text — the new session re-ids.
+  const navState = location.state as { assumptionEdits?: AssumptionEditNav[] } | null;
+  const seedAssumptions: SeedAssumption[] = (navState?.assumptionEdits ?? [])
+    .map((edit) => ({ text: edit.text.trim(), affirmed: edit.affirmed }))
+    .filter((edit) => edit.text !== "");
 
   const onReport = useCallback(
     (report: Report) => {
@@ -83,6 +100,8 @@ export function ResearchPage() {
     mode,
     rid,
     attempt,
+    location: locationParam,
+    seedAssumptions,
     onReport,
     onResearchId,
   });

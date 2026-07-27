@@ -2,7 +2,7 @@
 
 This is the persistent state file and the single acceptance authority for V1. Update checkboxes only after the gate is verified in the running app (per the loop engineering rules in `CLAUDE.md`). Keep the **Status** line and the scorecard current so any fresh session can resume from this file alone.
 
-**Status:** M2 complete — live research experience shipped end-to-end: server-side steerable sessions with lossless SSE replay on reload, editable assumptions + plan mid-run, best-fit-so-far / source-count / time-saved as evidence arrives, Quick/Full/Deep modes, transparent failure/retry, live-research telemetry. Adversarial review (qa-red-team, design-critic) closed: 2 HIGHs fixed + regression-tested (D-026), design T1 fixed (D-016 competitor-seller filter). Next: M3 — results depth.
+**Status:** M3 complete — results depth shipped: comparison grid with grounded per-competitor pros/cons/reviews (up to 10, editorial cards), price page with coarse IP-derived editable location scoping local retailers, change-assumptions-from-results (seeded re-run) + save-a-pick, history save/open/delete, category-playbook divergence test, results-engagement telemetry. Adversarial review clean (no trust/security violations; design bar cleared); 4 review polish items fixed + regression-tested (D-027). 81 unit tests green. Next: M4 — growth loop.
 
 ## V1 scorecard — measurable targets
 
@@ -55,12 +55,12 @@ Milestones are sequential; within a milestone, fan out parallel builder subagent
 
 ## M3 — Results depth
 
-- [ ] Comparison page: top 10 competitors in a readable grid with reviews, price ranges, pros/cons, from real structured data.
-- [ ] Price page: top online and local retailers; IP-derived location default, user-editable.
-- [ ] Backup picks saved; assumptions visible and changeable from results without restarting.
-- [ ] History: save, open, delete prior searches; home navigation solid.
-- [ ] Category playbooks demonstrably produce category-specific questions and criteria for both launch verticals.
-- [ ] Results engagement telemetry (source clicks, comparison usage, retailer clicks, saves) flowing.
+- [x] Comparison page: up to 10 competitors in a readable editorial grid with reviews, price ranges, pros/cons, from real structured data (quick mode surfaces fewer with an honest adaptive header; full/deep up to 10).
+- [x] Price page: top online and local retailers; IP-derived location default, user-editable (coarse region only; local retailers scoped to it).
+- [x] Backup picks saved; assumptions visible and changeable from results without restarting (edits re-run seeded server-side by text; save-a-pick persists + emits telemetry).
+- [x] History: save, open, delete prior searches; home navigation solid.
+- [x] Category playbooks demonstrably produce category-specific questions and criteria for both launch verticals (durable divergence test: disjoint question ids, distinct criteria).
+- [x] Results engagement telemetry (source clicks, comparison usage, retailer clicks, saves) flowing — verified in the events DB.
 
 ## M4 — Growth loop
 

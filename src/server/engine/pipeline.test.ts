@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveAssumptions } from "./pipeline";
 import type { AssembleInput } from "./sanitize";
 import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
 import { classifySource, domainFromChunk, type RawChunk } from "./sources";
@@ -67,6 +68,38 @@ const baseInput = (over: Partial<AssembleInput> = {}): AssembleInput => ({
     evidenceDisagreements: [],
   },
   ...over,
+});
+
+describe("resolveAssumptions (M3 gate 3 — re-run with edited assumptions)", () => {
+  it("uses classifier inferences when no seeds are given", () => {
+    const out = resolveAssumptions(undefined, ["You commute daily.", "  ", "You want ANC."]);
+    expect(out).toEqual([
+      { id: "a1", text: "You commute daily.", origin: "inferred", affirmed: true },
+      { id: "a2", text: "You want ANC.", origin: "inferred", affirmed: true },
+    ]);
+  });
+
+  it("seeds REPLACE inferences, carry origin 'user' and the affirmed flag", () => {
+    const out = resolveAssumptions(
+      [
+        { text: "You want under $300.", affirmed: true },
+        { text: "You care about brand.", affirmed: false },
+      ],
+      ["ignored inference"],
+    );
+    expect(out).toEqual([
+      { id: "a1", text: "You want under $300.", origin: "user", affirmed: true },
+      { id: "a2", text: "You care about brand.", origin: "user", affirmed: false },
+    ]);
+  });
+
+  it("trims/drops empty seed texts and caps at 8", () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ text: `seed ${i}`, affirmed: true }));
+    expect(resolveAssumptions(many, [])).toHaveLength(8);
+    expect(resolveAssumptions([{ text: "  ", affirmed: true }], ["fallback"])).toEqual([
+      { id: "a1", text: "fallback", origin: "inferred", affirmed: true },
+    ]);
+  });
 });
 
 describe("parsePrice", () => {
@@ -268,5 +301,73 @@ describe("assembleReport", () => {
     };
     const untouched = assembleReport(baseInput({ synthesis: homeGoodsCheck }));
     expect(untouched.category.id).toBe("consumer-electronics");
+  });
+});
+
+describe("assembleReport — comparison depth (M3 gate 1)", () => {
+  it("carries and clamps alternative pros/cons to 4 and keeps reviewSummary", () => {
+    const synthesis = {
+      ...baseSynthesis(),
+      alternatives: [
+        {
+          name: "Bose QuietComfort Ultra",
+          note: "Warmer tuning for treble-sensitive listeners.",
+          priceMin: 379,
+          priceMax: 429,
+          priceDisplay: "$379–$429",
+          ratingValue: 4.4,
+          pros: ["Best-in-class comfort", "Immersive spatial mode", "Strong ANC", "Solid app", "SIXTH pro should drop"],
+          cons: ["Pricey", "Shorter battery", "No multipoint at launch", "Bulkier case", "FIFTH con drops"],
+          reviewSummary: "Reviewers love the comfort and ANC but flag price.",
+          isKeyAlternative: true,
+        },
+      ],
+    };
+    const report = assembleReport(baseInput({ synthesis }));
+    const alt = report.alternatives[0]!;
+    expect(alt).toBeDefined();
+    expect(alt.pros).toHaveLength(4);
+    expect(alt.cons).toHaveLength(4);
+    expect(alt.pros).not.toContain("SIXTH pro should drop");
+    expect(alt.reviewSummary).toBe("Reviewers love the comfort and ANC but flag price.");
+    expect(alt.isKeyAlternative).toBe(true);
+  });
+
+  it("leaves pros/cons empty and reviewSummary null when the model omitted them (no fabrication)", () => {
+    const synthesis = {
+      ...baseSynthesis(),
+      alternatives: [{ name: "Sennheiser Momentum 4", note: "Longer battery life." }],
+    };
+    const report = assembleReport(baseInput({ synthesis }));
+    const alt = report.alternatives[0]!;
+    expect(alt.pros).toEqual([]);
+    expect(alt.cons).toEqual([]);
+    expect(alt.reviewSummary).toBeNull();
+  });
+});
+
+describe("assembleReport — location + local retailers (M3 gate 2)", () => {
+  it("sets report.location and populates locality for local rows, null for online-only", () => {
+    const synthesis = {
+      ...baseSynthesis(),
+      retailers: [
+        { seller: "Amazon", kind: "online", priceMin: 328, priceDisplay: "$328", availability: "In stock", url: null, locality: "Seattle, WA" },
+        { seller: "Best Buy", kind: "online-local", priceMin: 349, priceDisplay: "$349", availability: "Pickup today", url: null, locality: "Seattle, WA" },
+        { seller: "Local Audio Co", kind: "local", priceMin: 359, priceDisplay: "$359", availability: "In store", url: null, locality: "Seattle, WA" },
+      ],
+    };
+    const report = assembleReport(
+      baseInput({ synthesis, location: { label: "Seattle, WA", source: "ip" } }),
+    );
+    expect(report.location).toEqual({ label: "Seattle, WA", source: "ip" });
+    const bySeller = Object.fromEntries(report.retailers.map((r) => [r.seller, r]));
+    // Online-only row: locality forced null so a place can't leak onto it.
+    expect(bySeller["Amazon"]!.locality).toBeNull();
+    expect(bySeller["Best Buy"]!.locality).toBe("Seattle, WA");
+    expect(bySeller["Local Audio Co"]!.locality).toBe("Seattle, WA");
+  });
+
+  it("defaults report.location to null when none is supplied", () => {
+    expect(assembleReport(baseInput()).location).toBeNull();
   });
 });

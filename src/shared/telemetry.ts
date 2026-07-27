@@ -112,6 +112,22 @@ const deepDiveStarted = z.object({
   fromReportId: z.string().min(1),
 });
 
+/** M3 results-engagement: an explicit save of a pick (best fit or an alternative). */
+const pickSaved = z.object({
+  name: z.literal("pick_saved"),
+  reportId: z.string().min(1),
+  pickKind: z.enum(["best-fit", "alternative"]),
+  /** Ranked position saved (1 = best fit); no product identity beyond rank is logged. */
+  rank: z.number().int().positive(),
+});
+
+/** M3 results-engagement: the comparison grid was opened/used. */
+const comparisonUsed = z.object({
+  name: z.literal("comparison_used"),
+  reportId: z.string().min(1),
+  alternativesShown: z.number().int().nonnegative(),
+});
+
 export const EventBodySchema = z.discriminatedUnion("name", [
   searchStarted,
   researchStageCompleted,
@@ -125,6 +141,8 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   researchRedirected,
   researchAbandoned,
   deepDiveStarted,
+  pickSaved,
+  comparisonUsed,
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;
 

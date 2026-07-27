@@ -8,6 +8,7 @@ import {
   type CategoryId,
   type Confidence,
   type HoursSaved,
+  type Location,
   type PlanQuestion,
   type PriceRange,
   type ProductPick,
@@ -182,7 +183,12 @@ function buildBestFit(raw: unknown, knownSourceIds: ReadonlySet<string>, rationa
   };
 }
 
-/** Malformed entries (missing name/note) are dropped, ranks reassigned from 2, exactly one key alternative kept. */
+/**
+ * Malformed entries (missing name/note) are dropped, ranks reassigned from 2,
+ * exactly one key alternative kept. Per-competitor pros/cons are clamped to 4
+ * and reviewSummary carried through — all left empty when the model omitted
+ * them (the contract never fabricates comparison depth; M3 gate 1).
+ */
 function buildAlternatives(raw: unknown): Alternative[] {
   const picked = arr(raw)
     .flatMap((item) => {
@@ -197,6 +203,9 @@ function buildAlternatives(raw: unknown): Alternative[] {
           key: r.isKeyAlternative === true,
           ratingValue: clampRating(r.ratingValue),
           priceRange: hasPriceEvidence(r) ? priceFrom(r) : null,
+          pros: strArr(r.pros, 4),
+          cons: strArr(r.cons, 4),
+          reviewSummary: str(r.reviewSummary),
         },
       ];
     })
@@ -209,6 +218,9 @@ function buildAlternatives(raw: unknown): Alternative[] {
     priceRange: p.priceRange,
     ratingValue: p.ratingValue,
     note: p.note,
+    pros: p.pros,
+    cons: p.cons,
+    reviewSummary: p.reviewSummary,
     isKeyAlternative: i === keyIndex,
   }));
 }
@@ -252,6 +264,9 @@ function buildRetailers(
       const kind = (RETAILER_KINDS as readonly string[]).includes(kindRaw)
         ? (kindRaw as (typeof RETAILER_KINDS)[number])
         : "online";
+      // Locality only applies to rows with a local footprint; online-only rows
+      // are always null so a fabricated place can't leak in on an online seller.
+      const locality = kind === "online" ? null : str(r.locality);
       return [
         {
           seller,
@@ -259,6 +274,7 @@ function buildRetailers(
           price: priceFrom(r),
           availability: str(r.availability) ?? "Check retailer",
           url: safeUrl(r.url),
+          locality,
         },
       ];
     })
@@ -301,6 +317,8 @@ export type AssembleInput = {
   readonly category: { readonly id: CategoryId; readonly label: string; readonly confidence: number };
   readonly assumptions: readonly Assumption[];
   readonly questions: readonly PlanQuestion[];
+  /** Coarse buyer location used to scope local retailers; null when unknown. */
+  readonly location?: Location | null;
   /** Raw parsed JSON from the synthesize stage. */
   readonly synthesis: unknown;
   readonly rawSources: readonly RawChunk[];
@@ -385,6 +403,7 @@ export function assembleReport(input: AssembleInput): Report {
         .map((a) => str(rec(a)?.name))
         .filter((n): n is string => n !== null),
     ),
+    location: input.location ?? null,
     sources,
     meta: {
       engineVersion: ENGINE_VERSION,

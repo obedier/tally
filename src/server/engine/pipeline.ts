@@ -4,12 +4,14 @@ import {
   CategoryIdSchema,
   QueryTypeSchema,
   type Assumption,
+  type Location,
   type PlanQuestion,
   type Report,
   type ResearchControl,
   type ResearchError,
   type ResearchEvent,
   type ResearchMode,
+  type SeedAssumption,
   type StageTiming,
 } from "../../shared/report";
 import { PLAYBOOKS, questionsForMode, type Playbook } from "../../shared/playbooks";
@@ -48,11 +50,19 @@ export type ResearchInput = {
   readonly mode: ResearchMode;
   readonly sessionId?: string;
   readonly deviceId?: string;
+  /** Coarse buyer location (resolved in the route from geo header or user input). */
+  readonly location?: Location | null;
   readonly emit?: EmitFn;
   /** Live-session id; defaults to the report id for non-session runs. */
   readonly researchId?: string;
   /** Returns (and clears) any user controls queued since the last drain. */
   readonly drainControls?: DrainControlsFn;
+  /**
+   * User-edited assumptions carried from a prior report (M3). When present and
+   * non-empty, these REPLACE the classifier's inferred assumptions (origin
+   * "user") so a "re-run with my changes" starts pre-adjusted. Seeded by text.
+   */
+  readonly seedAssumptions?: readonly SeedAssumption[];
 };
 
 export class PipelineError extends Error {
@@ -218,6 +228,35 @@ function maybeEmitBestFit(evidence: EvidenceOutput, emit: EmitFn): void {
   });
 }
 
+/**
+ * Resolves the assumption set for a run. User-seeded assumptions from a "re-run
+ * with my changes" (M3) REPLACE the classifier's inferences (origin "user", up
+ * to 8, seeded by text); otherwise the classifier's inferred set is used (up to
+ * 5). `affirmed: false` seeds a dismissed, non-steering assumption. Pure.
+ */
+export function resolveAssumptions(
+  seedAssumptions: readonly SeedAssumption[] | undefined,
+  classifyAssumptions: readonly string[],
+): Assumption[] {
+  const seeds = (seedAssumptions ?? [])
+    .map((s) => ({ text: s.text.trim(), affirmed: s.affirmed }))
+    .filter((s) => s.text !== "")
+    .slice(0, 8);
+  if (seeds.length > 0) {
+    return seeds.map((s, i) => ({
+      id: `a${i + 1}`,
+      text: s.text,
+      origin: "user" as const,
+      affirmed: s.affirmed,
+    }));
+  }
+  return classifyAssumptions
+    .map((s) => s.trim())
+    .filter((s) => s !== "")
+    .slice(0, 5)
+    .map((text, i) => ({ id: `a${i + 1}`, text, origin: "inferred" as const, affirmed: true }));
+}
+
 export async function runResearch(input: ResearchInput): Promise<Report> {
   const t0 = Date.now();
   const emit: EmitFn = input.emit ?? (() => undefined);
@@ -251,6 +290,11 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   const apiKey = env.geminiApiKey;
   const model = env.geminiModel;
   const query = input.query.trim();
+  // Coarse location scopes local-retailer research; "default"-source labels are
+  // treated as unknown so we never invent local stores (M3 gate 2).
+  const location: Location | null = input.location ?? null;
+  const locationLabel = location?.label;
+  const locationKnown = location !== null && location.source !== "default";
   const reportId = nanoid(12);
   ctx.reportId = reportId;
   const ids = anonIds(input);
@@ -301,11 +345,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     }
   });
 
-  let assumptions: Assumption[] = classify.assumptions
-    .map((s) => s.trim())
-    .filter((s) => s !== "")
-    .slice(0, 5)
-    .map((text, i) => ({ id: `a${i + 1}`, text, origin: "inferred" as const, affirmed: true }));
+  let assumptions: Assumption[] = resolveAssumptions(input.seedAssumptions, classify.assumptions);
   emit({ type: "assumptions", assumptions });
 
   // 2. Plan (playbook questions + engine extras; no model call).
@@ -373,6 +413,8 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
                 criteria: playbook.criteria,
                 assumptions: affirmedAssumptionTexts(assumptions),
                 questions: group.map((q) => ({ id: q.id, text: q.text })),
+                ...(locationLabel === undefined ? {} : { location: locationLabel }),
+                locationKnown,
                 concise: input.mode === "quick",
               }),
             },
@@ -471,6 +513,8 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
           assumptions: affirmedAssumptionTexts(assumptions),
           evidenceNotes,
           sourceList,
+          ...(locationLabel === undefined ? {} : { location: locationLabel }),
+          locationKnown,
           concise: input.mode === "quick",
         }),
       },
@@ -495,6 +539,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     category: { id: classify.category.id, label: categoryLabel, confidence: classify.category.confidence },
     assumptions,
     questions: plan,
+    location,
     synthesis,
     rawSources: chunks,
     hoursSaved,

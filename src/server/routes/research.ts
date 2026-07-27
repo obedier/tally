@@ -1,11 +1,14 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { stream } from "hono/streaming";
 import {
   ResearchControlSchema,
   ResearchModeSchema,
+  SeedAssumptionSchema,
+  type Location,
   type ResearchError,
   type ResearchEvent,
   type ResearchMode,
+  type SeedAssumption,
 } from "../../shared/report";
 import { AnonIdSchema } from "../../shared/telemetry";
 import { PipelineError, runResearch } from "../engine/pipeline";
@@ -34,6 +37,75 @@ import {
 
 const HEARTBEAT_MS = 15_000;
 const MAX_QUERY_LENGTH = 500;
+// Coarse label only (city/region/country names); never a precise address.
+const MAX_LOCATION_LENGTH = 120;
+const DEFAULT_LOCATION_LABEL = "United States";
+
+/**
+ * Coarse geo signals read from a trusted proxy/CDN. NEVER precise — only
+ * country/region/city-name granularity, per docs/LEARNING.md privacy rules.
+ */
+type GeoHeaders = {
+  readonly country?: string;
+  readonly region?: string;
+  readonly city?: string;
+};
+
+const decodeHeader = (v: string | undefined): string | undefined => {
+  if (v === undefined) return undefined;
+  let out = v;
+  try {
+    out = decodeURIComponent(v);
+  } catch {
+    out = v;
+  }
+  const trimmed = out.trim().slice(0, MAX_LOCATION_LENGTH);
+  return trimmed === "" ? undefined : trimmed;
+};
+
+/**
+ * Reads coarse geo headers set by the edge/proxy. Cloudflare exposes
+ * `cf-ipcountry`; Vercel exposes `x-vercel-ip-country` / `-city` /
+ * `-country-region`; `x-tally-country` is a custom escape hatch. City-name
+ * granularity is the finest we ever read — never precise coordinates.
+ */
+function geoFromHeaders(c: Context): GeoHeaders {
+  const country = decodeHeader(
+    c.req.header("cf-ipcountry") ??
+      c.req.header("x-vercel-ip-country") ??
+      c.req.header("x-tally-country"),
+  );
+  return {
+    ...(country === undefined ? {} : { country }),
+    ...((): { region?: string } => {
+      const region = decodeHeader(c.req.header("x-vercel-ip-country-region"));
+      return region === undefined ? {} : { region };
+    })(),
+    ...((): { city?: string } => {
+      const city = decodeHeader(c.req.header("x-vercel-ip-city"));
+      return city === undefined ? {} : { city };
+    })(),
+  };
+}
+
+/**
+ * Resolves the coarse buyer location, precedence: explicit user location >
+ * IP-derived geo headers > labeled default. Only ever region/country/city-name
+ * granularity — never precise. `source` records provenance so the UI is honest.
+ */
+export function resolveLocation(userLocation: string | undefined, geo: GeoHeaders): Location {
+  const user = typeof userLocation === "string" ? userLocation.trim() : "";
+  if (user !== "") {
+    return { label: user.slice(0, MAX_LOCATION_LENGTH), source: "user" };
+  }
+  const parts = [geo.city, geo.region, geo.country]
+    .map((p) => p?.trim())
+    .filter((p): p is string => p !== undefined && p !== "");
+  if (parts.length > 0) {
+    return { label: parts.join(", ").slice(0, MAX_LOCATION_LENGTH), source: "ip" };
+  }
+  return { label: DEFAULT_LOCATION_LABEL, source: "default" };
+}
 
 /**
  * Inbound rate limiting: research spends real money per call, so cap starts
@@ -107,6 +179,8 @@ type ValidatedParams = {
   readonly mode: ResearchMode;
   readonly sessionId?: string;
   readonly deviceId?: string;
+  /** Coarse buyer location resolved from user input or geo headers. */
+  readonly location: Location;
 };
 
 type Validation =
@@ -123,6 +197,8 @@ function validateParams(
   rawMode: unknown,
   rawSessionId: unknown,
   rawDeviceId: unknown,
+  rawLocation: unknown,
+  geo: GeoHeaders,
 ): Validation {
   const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
   if (query.length < 1 || query.length > MAX_QUERY_LENGTH) {
@@ -131,6 +207,12 @@ function validateParams(
   const mode = ResearchModeSchema.safeParse(rawMode);
   if (!mode.success) {
     return invalid("Mode must be one of: quick, full, deep.");
+  }
+  // Optional; over-long user location is rejected rather than silently sliced so
+  // the client learns its input was malformed.
+  const rawLoc = typeof rawLocation === "string" ? rawLocation.trim() : "";
+  if (rawLoc.length > MAX_LOCATION_LENGTH) {
+    return invalid(`Location must be at most ${MAX_LOCATION_LENGTH} characters.`);
   }
   const sessionId = AnonIdSchema.safeParse(rawSessionId);
   const deviceId = AnonIdSchema.safeParse(rawDeviceId);
@@ -141,6 +223,7 @@ function validateParams(
       mode: mode.data,
       ...(sessionId.success ? { sessionId: sessionId.data } : {}),
       ...(deviceId.success ? { deviceId: deviceId.data } : {}),
+      location: resolveLocation(rawLoc === "" ? undefined : rawLoc, geo),
     },
   };
 }
@@ -172,6 +255,23 @@ const NOT_FOUND_ERROR: ResearchError = {
   retryable: false,
 };
 
+/**
+ * Parse optional user-seeded assumptions from a request body (M3 re-run).
+ * Filters to the valid items and caps at 8 rather than discarding the whole
+ * array on one bad element — a single malformed edit must not silently drop
+ * the user's other edits.
+ */
+export function parseSeedAssumptions(raw: unknown): readonly SeedAssumption[] {
+  if (!Array.isArray(raw)) return [];
+  const valid: SeedAssumption[] = [];
+  for (const item of raw) {
+    const parsed = SeedAssumptionSchema.safeParse(item);
+    if (parsed.success) valid.push(parsed.data);
+    if (valid.length >= 8) break;
+  }
+  return valid;
+}
+
 export function registerResearchRoutes(app: Hono): void {
   app.post("/api/research/session", async (c) => {
     let body: unknown;
@@ -182,13 +282,23 @@ export function registerResearchRoutes(app: Hono): void {
       return c.json(error.ok === false ? error.error : null, 400);
     }
     const record = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
-    const parsed = validateParams(record.query, record.mode, record.sessionId, record.deviceId);
+    const parsed = validateParams(
+      record.query,
+      record.mode,
+      record.sessionId,
+      record.deviceId,
+      record.location,
+      geoFromHeaders(c),
+    );
     if (!parsed.ok) return c.json(parsed.error, 400);
     const ip = c.req.header("x-forwarded-for");
     if (rateLimited(clientKey(ip, parsed.value.sessionId))) {
       return c.json(RATE_LIMIT_ERROR, 429);
     }
-    const researchId = startResearchSession(parsed.value);
+    const seedAssumptions = parseSeedAssumptions(record.seedAssumptions);
+    const researchId = startResearchSession(
+      seedAssumptions.length > 0 ? { ...parsed.value, seedAssumptions } : parsed.value,
+    );
     return c.json({ ok: true as const, researchId }, 200);
   });
 
@@ -276,6 +386,8 @@ export function registerResearchRoutes(app: Hono): void {
       c.req.query("mode"),
       c.req.query("sessionId"),
       c.req.query("deviceId"),
+      c.req.query("location"),
+      geoFromHeaders(c),
     );
     if (!parsed.ok) return c.json(parsed.error, 400);
     const ip = c.req.header("x-forwarded-for");
@@ -326,7 +438,14 @@ export function registerResearchRoutes(app: Hono): void {
       return c.json(error.ok === false ? error.error : null, 400);
     }
     const record = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
-    const parsed = validateParams(record.query, record.mode, record.sessionId, record.deviceId);
+    const parsed = validateParams(
+      record.query,
+      record.mode,
+      record.sessionId,
+      record.deviceId,
+      record.location,
+      geoFromHeaders(c),
+    );
     if (!parsed.ok) return c.json(parsed.error, 400);
     const ip = c.req.header("x-forwarded-for");
     if (rateLimited(clientKey(ip, parsed.value.sessionId))) {

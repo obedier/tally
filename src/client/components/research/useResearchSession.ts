@@ -9,6 +9,7 @@ import type {
   ResearchError,
   ResearchEvent,
   ResearchMode,
+  SeedAssumption,
 } from "../../../shared/report";
 import {
   ApiError,
@@ -92,6 +93,10 @@ export interface UseResearchSessionArgs {
   /** Session id from the URL; null until the session has been started. */
   rid: string | null;
   attempt: number;
+  /** Coarse location (from ?location=) to scope local retailers on this run. */
+  location?: string;
+  /** User-edited assumptions carried from a report (M3 re-run with changes). */
+  seedAssumptions?: readonly SeedAssumption[];
   onReport: (report: Report) => void;
   /** Called once the POST returns; the page replaces the URL with ?rid=. */
   onResearchId: (researchId: string) => void;
@@ -201,7 +206,8 @@ function applyStreamEvent(current: SessionState, event: ResearchEvent): SessionS
  * server's stage timings — honest, never simulated.
  */
 export function useResearchSession(args: UseResearchSessionArgs): UseResearchSession {
-  const { locationKey, query, mode, rid, attempt, onReport, onResearchId } = args;
+  const { locationKey, query, mode, rid, attempt, location, seedAssumptions, onReport, onResearchId } =
+    args;
   const [state, setState] = useState<SessionState>(INITIAL);
 
   const onReportRef = useRef(onReport);
@@ -235,6 +241,8 @@ export function useResearchSession(args: UseResearchSessionArgs): UseResearchSes
         mode,
         sessionId: getSessionId(),
         deviceId: getDeviceId(),
+        ...(location && location.trim() !== "" ? { location: location.trim() } : {}),
+        ...(seedAssumptions && seedAssumptions.length > 0 ? { seedAssumptions } : {}),
       });
     rememberStart(cacheKey, promise);
     promise

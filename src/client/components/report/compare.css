@@ -1,0 +1,114 @@
+/* Comparison cards — competitor depth (reviews, pros, cons) legible at 390px. */
+
+.compare__list {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.compare-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+}
+
+.compare-card--lead {
+  border-color: var(--color-green);
+  box-shadow: var(--shadow-card);
+}
+
+.compare-card--key {
+  border-left: 3px solid var(--color-orange);
+}
+
+.compare-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.compare-card__rank {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-small);
+  color: var(--color-muted);
+}
+
+.compare-card__rank--lead {
+  color: var(--color-on-green);
+  background: var(--color-green);
+  border-radius: var(--radius-xs);
+  padding: 2px 6px;
+}
+
+.compare-card__name {
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.compare-card__key-tag {
+  color: var(--color-orange);
+  font-weight: 700;
+}
+
+.compare-card__meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.compare-card__price,
+.compare-card__rating {
+  font-size: var(--text-small);
+  font-weight: 700;
+  color: var(--color-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-card__rating--none {
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.compare-card__tradeoff {
+  color: var(--color-text);
+  max-width: 60ch;
+}
+
+.compare-card__reviews {
+  color: var(--color-muted);
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.compare-card__pros-cons {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+@media (min-width: 480px) {
+  .compare-card__pros-cons {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+}
+
+.compare-card__col ul {
+  margin: var(--space-1) 0 0;
+  padding-left: 1.1rem;
+}
+
+.compare-card__col li {
+  font-size: var(--text-small);
+  line-height: 1.45;
+  margin-top: var(--space-1);
+}

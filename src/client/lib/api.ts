@@ -10,6 +10,7 @@ import {
   type ResearchError,
   type ResearchEvent,
   type ResearchMode,
+  type SeedAssumption,
 } from "../../shared/report";
 
 /**
@@ -129,6 +130,33 @@ export interface StartSessionRequest {
   mode: ResearchMode;
   sessionId: string;
   deviceId: string;
+  /**
+   * Coarse buyer location to scope local retailers (M3). Sent as `body.location`
+   * only when present; the server reads it. Never precise — city/region only.
+   */
+  location?: string;
+  /** User-edited assumptions carried from a report into this re-run (M3). */
+  seedAssumptions?: readonly SeedAssumption[];
+}
+
+/** Params for a client-initiated (re)run navigation to /research. */
+export interface ResearchNavParams {
+  query: string;
+  mode: ResearchMode;
+  /** Coarse location to scope the rerun; carried as ?location= for the session start. */
+  location?: string;
+}
+
+/**
+ * Builds the /research path for a (re)run. Centralized here so every surface
+ * that re-runs research (prices location edit, report assumption edit, history)
+ * produces the same URL contract: ?q=&mode=(&location=).
+ */
+export function buildResearchPath({ query, mode, location }: ResearchNavParams): string {
+  const params = new URLSearchParams({ q: query, mode });
+  const trimmed = location?.trim();
+  if (trimmed) params.set("location", trimmed);
+  return `/research?${params.toString()}`;
 }
 
 /** POST /api/research/session — starts a live session, returns its researchId. */

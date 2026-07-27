@@ -63,12 +63,16 @@ function makeReport(id: string, createdAt: string, query = "best budget headphon
         priceRange: PRICE,
         ratingValue: 4.2,
         note: "Pick this if you want a lighter fit.",
+        pros: ["Lighter on the head"],
+        cons: ["Weaker ANC"],
+        reviewSummary: "Reviewers like the fit, note weaker noise cancelling.",
         isKeyAlternative: true,
       },
     ],
     retailers: [
-      { seller: "Amazon", kind: "online", price: PRICE, availability: "In stock", url: null },
+      { seller: "Amazon", kind: "online", price: PRICE, availability: "In stock", url: null, locality: null },
     ],
+    location: null,
     sources: [
       {
         id: "s1",

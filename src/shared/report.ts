@@ -82,6 +82,15 @@ export const AlternativeSchema = z.object({
   ratingValue: z.number().min(0).max(5).nullable(),
   /** The tradeoff in one sentence — what different priority makes this the pick instead. */
   note: z.string().min(1),
+  /**
+   * Per-competitor evidence for the comparison grid (M3). Defaulted empty so
+   * pre-M3 stored reports keep validating; never fabricated — the sanitizer
+   * leaves these empty when the evidence didn't support them.
+   */
+  pros: z.array(z.string().min(1)).max(4).default([]),
+  cons: z.array(z.string().min(1)).max(4).default([]),
+  /** One-line digest of review themes; null when no verified reviews exist. */
+  reviewSummary: z.string().min(1).nullable().default(null),
   /** Marks the single "excellent alternative for different priorities" per docs/PRODUCT.md. */
   isKeyAlternative: z.boolean().default(false),
 });
@@ -95,8 +104,21 @@ export const RetailerListingSchema = z.object({
   availability: z.string().min(1),
   /** Direct retailer URL when the evidence provided one; never fabricated. */
   url: z.string().url().nullable(),
+  /** For local rows: the coarse place the listing applies to (e.g. "Seattle, WA"); null for online-only. */
+  locality: z.string().min(1).nullable().default(null),
 });
 export type RetailerListing = z.infer<typeof RetailerListingSchema>;
+
+/**
+ * Coarse buyer location used to scope local retailers (M3). Never precise —
+ * region/city granularity only, per docs/LEARNING.md privacy rules. `source`
+ * records how it was set so the UI can be honest ("detected" vs "you set").
+ */
+export const LocationSchema = z.object({
+  label: z.string().min(1),
+  source: z.enum(["ip", "user", "default"]),
+});
+export type Location = z.infer<typeof LocationSchema>;
 
 export const AssumptionSchema = z.object({
   id: z.string().min(1),
@@ -105,6 +127,18 @@ export const AssumptionSchema = z.object({
   affirmed: z.boolean(),
 });
 export type Assumption = z.infer<typeof AssumptionSchema>;
+
+/**
+ * User-edited assumptions carried from a completed report into a fresh research
+ * run (M3 "change assumptions from results"). Seeded by TEXT — the new session
+ * assigns fresh ids — so re-inference id drift can't misalign them. `affirmed:
+ * false` seeds a dismissed assumption (visible, non-steering), matching M2.
+ */
+export const SeedAssumptionSchema = z.object({
+  text: z.string().min(1).max(200),
+  affirmed: z.boolean(),
+});
+export type SeedAssumption = z.infer<typeof SeedAssumptionSchema>;
 
 export const PlanQuestionSchema = z.object({
   id: z.string().min(1),
@@ -187,6 +221,8 @@ export const ReportSchema = z.object({
   /** Ranked; for a "need" query this is the shortlist below the #1 pick. */
   alternatives: z.array(AlternativeSchema).max(10),
   retailers: z.array(RetailerListingSchema).max(12),
+  /** Coarse location used to scope local retailers; null for pre-M3 reports or when unknown. */
+  location: LocationSchema.nullable().default(null),
   sources: z.array(SourceSchema),
   meta: ReportMetaSchema,
 });

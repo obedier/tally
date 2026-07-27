@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { Report, ResearchMode } from "../../../shared/report";
+import type { Assumption, Report, ResearchMode } from "../../../shared/report";
+import { buildResearchPath } from "../../lib/api";
 import { track } from "../../lib/telemetry";
 import { ErrorState, PageTop, ReportMissing } from "../ui/States";
 import { SourcesSheet } from "./SourcesSheet";
-import { useReport, useReportViewed } from "./useReport";
+import { useReport, useReportViewed, useSavedPick, type SavedPickControls } from "./useReport";
 import "./report.css";
 
 const MODE_KICKERS: Record<ResearchMode, string> = {
@@ -43,6 +44,7 @@ function ReportSummary({ report }: { report: Report }) {
   const navigate = useNavigate();
   const [reasonOpen, setReasonOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const savedPick = useSavedPick(report.id);
   const { verdict, bestFit } = report;
   const keyAlternative = report.alternatives.find((alternative) => alternative.isKeyAlternative) ?? null;
 
@@ -101,6 +103,7 @@ function ReportSummary({ report }: { report: Report }) {
           </p>
         ) : null}
         <p className="body-copy report__why-best">{bestFit.whyBest}</p>
+        <SavePickButton controls={savedPick} rank={1} pickKind="best-fit" label="Save this pick" />
         <div className="report__pros-cons">
           <div>
             <h3 className="kicker">Top pros</h3>
@@ -131,6 +134,12 @@ function ReportSummary({ report }: { report: Report }) {
             {keyAlternative.priceRange && keyAlternative.ratingValue !== null ? " · " : null}
             {keyAlternative.ratingValue !== null ? `${keyAlternative.ratingValue} / 5` : null}
           </p>
+          <SavePickButton
+            controls={savedPick}
+            rank={keyAlternative.rank}
+            pickKind="alternative"
+            label="Save as backup pick"
+          />
         </section>
       ) : null}
 
@@ -175,26 +184,169 @@ function ReportSummary({ report }: { report: Report }) {
       </nav>
 
       {report.assumptions.length > 0 ? (
-        <section className="report__assumptions" aria-label="What we assumed">
-          <h2 className="kicker">What we assumed</h2>
-          <ul className="report__chips">
-            {report.assumptions.map((assumption) => (
-              <li
-                key={assumption.id}
-                className={assumption.affirmed ? undefined : "report__chip--dismissed"}
-              >
-                {assumption.text}
-                {assumption.affirmed ? null : (
-                  <span className="micro-copy report__chip-note"> — you dismissed this; it didn't steer the research</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <AssumptionsEditor
+          assumptions={report.assumptions}
+          query={report.query}
+          mode={report.meta.mode}
+        />
       ) : null}
 
       <SourcesSheet report={report} open={sourcesOpen} onClose={() => setSourcesOpen(false)} />
     </main>
+  );
+}
+
+/**
+ * A neutral device-local bookmark for a pick — never a purchase prompt, no
+ * urgency. Once saved it reads "Saved" and can't re-fire telemetry.
+ */
+function SavePickButton({
+  controls,
+  rank,
+  pickKind,
+  label,
+}: {
+  controls: SavedPickControls;
+  rank: number;
+  pickKind: "best-fit" | "alternative";
+  label: string;
+}) {
+  const saved = controls.isSaved(rank);
+  return (
+    <button
+      type="button"
+      className={`report__save-pick${saved ? " report__save-pick--saved" : ""}`}
+      onClick={() => controls.save(rank, pickKind)}
+      disabled={saved}
+      aria-pressed={saved}
+    >
+      <span aria-hidden="true">{saved ? "✓" : "＋"}</span>
+      {saved ? "Saved to your picks" : label}
+    </button>
+  );
+}
+
+interface AssumptionDraft {
+  id: string;
+  text: string;
+  affirmed: boolean;
+}
+
+/**
+ * "What we assumed", changeable without retyping the query. Reword or dismiss
+ * an assumption here, then re-run: the edits are carried to a fresh research
+ * session (query + mode), which never mutates THIS report — nothing shown is
+ * ever relabeled after the fact. You can keep steering assumptions live while
+ * the new research runs.
+ */
+function AssumptionsEditor({
+  assumptions,
+  query,
+  mode,
+}: {
+  assumptions: Assumption[];
+  query: string;
+  mode: ResearchMode;
+}) {
+  const navigate = useNavigate();
+  const [drafts, setDrafts] = useState<AssumptionDraft[]>(() =>
+    assumptions.map((a) => ({ id: a.id, text: a.text, affirmed: a.affirmed })),
+  );
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const original = new Map(assumptions.map((a) => [a.id, a] as const));
+  const dirty = drafts.some((d) => {
+    const base = original.get(d.id);
+    return base ? base.text !== d.text || base.affirmed !== d.affirmed : false;
+  });
+
+  const setDraft = (id: string, patch: Partial<AssumptionDraft>): void => {
+    setDrafts((current) => current.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  };
+
+  const rerun = (): void => {
+    // Carry the revised assumptions in navigation state so a fresh session can
+    // seed them; the URL still re-runs the query even if they aren't consumed.
+    navigate(buildResearchPath({ query, mode }), {
+      state: { assumptionEdits: drafts },
+    });
+  };
+
+  return (
+    <section className="report__assumptions" aria-label="What we assumed">
+      <h2 className="kicker">What we assumed</h2>
+      <p className="micro-copy report__assumptions-lead">
+        Reword or dismiss any of these, then re-run — your changes steer a fresh research pass.
+      </p>
+      <ul className="report__assumption-edit-list">
+        {drafts.map((draft) => (
+          <li
+            key={draft.id}
+            className={`report__assumption-edit${draft.affirmed ? "" : " report__assumption-edit--dismissed"}`}
+          >
+            {editingId === draft.id ? (
+              <div className="report__assumption-reword">
+                <label className="micro-copy" htmlFor={`assumption-${draft.id}`}>
+                  Reword this assumption
+                </label>
+                <input
+                  id={`assumption-${draft.id}`}
+                  className="report__assumption-input"
+                  type="text"
+                  value={draft.text}
+                  onChange={(event) => setDraft(draft.id, { text: event.target.value })}
+                  enterKeyHint="done"
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="report__assumption-action"
+                  onClick={() => setEditingId(null)}
+                  disabled={!draft.text.trim()}
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div className="report__assumption-view">
+                <span className="report__assumption-text">
+                  {draft.text}
+                  {draft.affirmed ? null : (
+                    <span className="report__assumption-tag">Dismissed</span>
+                  )}
+                </span>
+                <span className="report__assumption-controls">
+                  <button
+                    type="button"
+                    className="report__assumption-action"
+                    onClick={() => {
+                      setDraft(draft.id, { affirmed: true });
+                      setEditingId(draft.id);
+                    }}
+                  >
+                    Reword
+                  </button>
+                  <button
+                    type="button"
+                    className="report__assumption-action"
+                    onClick={() => setDraft(draft.id, { affirmed: !draft.affirmed })}
+                    aria-pressed={!draft.affirmed}
+                  >
+                    {draft.affirmed ? "Dismiss" : "Restore"}
+                  </button>
+                </span>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {dirty ? (
+        <button type="button" className="report__assumptions-rerun" onClick={rerun}>
+          Re-run research with these changes <span aria-hidden="true">→</span>
+        </button>
+      ) : null}
+    </section>
   );
 }
 
