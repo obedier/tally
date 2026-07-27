@@ -1,0 +1,338 @@
+/*
+ * Decision polls — public /poll/:id vote surface and the create panel mounted
+ * on the comparison page. Editorial, warm-paper direction; tallies read as
+ * quiet evidence bars, never a gamified leaderboard. Legible at 390px.
+ */
+
+.poll__intro,
+.poll-create__intro {
+  margin-top: var(--space-3);
+  max-width: var(--column-max);
+}
+
+/* ---- Options + tallies ---- */
+
+.poll__options {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  list-style: none;
+  padding: 0;
+}
+
+.poll-option__button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.poll-option__button:hover:not(:disabled) {
+  border-color: var(--color-green-soft);
+}
+
+.poll-option__button:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 2px;
+}
+
+.poll-option__button:disabled {
+  cursor: default;
+}
+
+.poll-option__button--mine {
+  border-color: var(--color-green);
+  box-shadow: var(--shadow-card);
+}
+
+/* Tally fill sits behind the content — a compositor-friendly width transition.
+   Tinted clearly (not the faint wash) so the bar reads as vote PROPORTION, with
+   a defined right edge so it never looks like a full-card selection highlight. */
+.poll-option__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in oklab, var(--color-green) 14%, transparent);
+  border-right: 2px solid color-mix(in oklab, var(--color-green) 45%, transparent);
+  transition: width var(--duration-normal) var(--ease-out);
+  z-index: 0;
+}
+
+.poll-option__button--mine .poll-option__bar {
+  background: color-mix(in oklab, var(--color-green) 26%, transparent);
+  border-right-color: var(--color-green);
+}
+
+.poll-option__body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.poll-option__label {
+  font-weight: 700;
+  font-size: var(--text-base);
+  line-height: 1.25;
+}
+
+.poll-option__note {
+  color: var(--color-muted);
+}
+
+.poll-option__count {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-small);
+  color: var(--color-green);
+  white-space: nowrap;
+}
+
+.poll__total {
+  margin-top: var(--space-3);
+  color: var(--color-muted);
+}
+
+.poll__vote-error {
+  margin-top: var(--space-2);
+  color: var(--color-orange);
+}
+
+/* ---- Comments ---- */
+
+.poll__comments {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-line);
+}
+
+.poll-comment-form {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.poll-comment-form__input {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  font: inherit;
+  font-size: var(--text-base);
+  resize: vertical;
+}
+
+.poll-comment-form__input:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 1px;
+  border-color: var(--color-green);
+}
+
+.poll-comment-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.poll-comment-form__count {
+  color: var(--color-muted);
+}
+
+.poll__comments-empty {
+  margin-top: var(--space-4);
+  color: var(--color-muted);
+}
+
+.poll-comment-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  list-style: none;
+  padding: 0;
+}
+
+.poll-comment {
+  padding: var(--space-3) var(--space-4);
+  border-left: 2px solid var(--color-green-soft);
+  background: var(--color-green-wash);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.poll-comment__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Visitor -> searcher CTA ---- */
+
+.poll__cta {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+}
+
+/* ---- Loading skeletons ---- */
+
+.poll__skeletons {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.poll__skeleton--headline {
+  height: 2.5rem;
+  width: 70%;
+  border-radius: var(--radius-sm);
+}
+
+.poll__skeleton--option {
+  height: 4rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Create panel (comparison page) ---- */
+
+.poll-create {
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  box-shadow: var(--shadow-card);
+}
+
+.poll-create__framing {
+  margin-top: var(--space-2);
+}
+
+.poll-create__label {
+  display: block;
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-kicker);
+}
+
+.poll-create__question {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.poll-create__question:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 1px;
+  border-color: var(--color-green);
+}
+
+.poll-create__options {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: 0;
+  border: 0;
+}
+
+.poll-create-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.poll-create-option:hover {
+  border-color: var(--color-green-soft);
+}
+
+.poll-create-option--on {
+  border-color: var(--color-green);
+  background: var(--color-green-wash);
+}
+
+.poll-create-option__check {
+  margin-top: 3px;
+  flex: 0 0 auto;
+  accent-color: var(--color-green);
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.poll-create-option__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.poll-create-option__label {
+  font-weight: 700;
+  font-size: var(--text-base);
+  line-height: 1.25;
+}
+
+.poll-create-option__note {
+  color: var(--color-muted);
+}
+
+.poll-create__submit {
+  margin-top: var(--space-5);
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poll-option__button,
+  .poll-option__bar,
+  .poll-create-option {
+    transition: none;
+  }
+}
+
+/* Persistent link to the full research — guarantees voters can always reach the
+   evidence, even when a given option's inline note is sparse (gate 5 promise). */
+.poll__evidence-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-2);
+  color: var(--color-green);
+  font-weight: 600;
+  font-size: var(--text-small);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  width: fit-content;
+}
+
+.poll__evidence-link:hover {
+  opacity: 0.85;
+}

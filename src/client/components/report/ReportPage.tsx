@@ -4,6 +4,8 @@ import type { Assumption, Report, ResearchMode } from "../../../shared/report";
 import { buildResearchPath } from "../../lib/api";
 import { track } from "../../lib/telemetry";
 import { ErrorState, PageTop, ReportMissing } from "../ui/States";
+import { PriceWatchButton } from "./PriceWatchButton";
+import { Attribution, ShareButton } from "./ShareBar";
 import { SourcesSheet } from "./SourcesSheet";
 import { useReport, useReportViewed, useSavedPick, type SavedPickControls } from "./useReport";
 import "./report.css";
@@ -103,7 +105,10 @@ function ReportSummary({ report }: { report: Report }) {
           </p>
         ) : null}
         <p className="body-copy report__why-best">{bestFit.whyBest}</p>
-        <SavePickButton controls={savedPick} rank={1} pickKind="best-fit" label="Save this pick" />
+        <div className="report__pick-actions">
+          <SavePickButton controls={savedPick} rank={1} pickKind="best-fit" label="Save this pick" />
+          <PriceWatchButton reportId={report.id} rank={1} pickName={bestFit.name} />
+        </div>
         <div className="report__pros-cons">
           <div>
             <h3 className="kicker">Top pros</h3>
@@ -190,6 +195,13 @@ function ReportSummary({ report }: { report: Report }) {
           mode={report.meta.mode}
         />
       ) : null}
+
+      <div className="report__share-row">
+        <ShareButton reportId={report.id} surface="report" />
+        <p className="micro-copy report__share-note">Good enough to send to a friend.</p>
+      </div>
+
+      <Attribution />
 
       <SourcesSheet report={report} open={sourcesOpen} onClose={() => setSourcesOpen(false)} />
     </main>

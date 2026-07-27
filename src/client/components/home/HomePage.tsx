@@ -1,10 +1,14 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { ResearchMode } from "../../../shared/report";
 import { track } from "../../lib/telemetry";
 import { Lockup, Spyglass } from "../ui/Lockup";
 import { RecentResearch } from "./RecentResearch";
 import "./home.css";
+
+/** Entry values a visitor→searcher CTA may carry in ?entry= (growth loop). */
+const CTA_ENTRIES = ["share-cta", "poll"] as const;
+type CtaEntry = (typeof CTA_ENTRIES)[number];
 
 const EXAMPLES: ReadonlyArray<{ label: string; query: string }> = [
   { label: "Try Dyson V12 Detect", query: "Dyson V12 Detect" },
@@ -19,13 +23,21 @@ const MODES: ReadonlyArray<{ id: ResearchMode; label: string; hint: string }> = 
 
 export function HomePage() {
   const navigate = useNavigate();
-  const [draft, setDraft] = useState("");
+  const [params] = useSearchParams();
+  // A visitor arriving from a share/poll CTA carries ?entry=; their first search
+  // is the converted visitor→searcher event (S7). An optional ?q= pre-fills.
+  const rawEntry = params.get("entry");
+  const ctaEntry: CtaEntry | null = CTA_ENTRIES.includes(rawEntry as CtaEntry)
+    ? (rawEntry as CtaEntry)
+    : null;
+  const [draft, setDraft] = useState(() => params.get("q")?.trim() ?? "");
   const [mode, setMode] = useState<ResearchMode>("full");
 
   const startResearch = (query: string, entry: "home-search" | "example-chip") => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    track({ name: "search_started", query: trimmed, mode, entry });
+    // A CTA arrival attributes the conversion to that source, not the local action.
+    track({ name: "search_started", query: trimmed, mode, entry: ctaEntry ?? entry });
     navigate(`/research?q=${encodeURIComponent(trimmed)}&mode=${mode}`);
   };
 

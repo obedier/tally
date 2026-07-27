@@ -4,6 +4,7 @@ import { ResearchPage } from "./components/research/ResearchPage";
 import { ComparePage } from "./components/report/ComparePage";
 import { PricesPage } from "./components/report/PricesPage";
 import { ReportPage } from "./components/report/ReportPage";
+import { PollPage } from "./components/poll/PollPage";
 import { PageTop, ReportMissing } from "./components/ui/States";
 
 function NotFoundPage() {
@@ -24,6 +25,7 @@ export function App() {
         <Route path="/report/:id" element={<ReportPage />} />
         <Route path="/report/:id/compare" element={<ComparePage />} />
         <Route path="/report/:id/prices" element={<PricesPage />} />
+        <Route path="/poll/:id" element={<PollPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>

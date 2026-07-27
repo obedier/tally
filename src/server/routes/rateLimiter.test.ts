@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRateLimiter } from "./research";
+import { createRateLimiter } from "../rateLimit";
 
 const WINDOW = 10 * 60 * 1000;
 

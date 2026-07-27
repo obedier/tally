@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import type { Alternative, Report } from "../../../shared/report";
 import { track } from "../../lib/telemetry";
+import { PollCreatePanel } from "../poll/PollCreatePanel";
 import { ErrorState, PageTop, ReportMissing } from "../ui/States";
+import { Attribution, ShareButton } from "./ShareBar";
 import { useReport, useReportViewed } from "./useReport";
 import "./report.css";
 import "./compare.css";
@@ -96,6 +98,14 @@ function Comparison({ report }: { report: Report }) {
           />
         ))}
       </div>
+
+      <PollCreatePanel report={report} />
+
+      <div className="report__share-row">
+        <ShareButton reportId={report.id} surface="compare" />
+      </div>
+
+      <Attribution />
     </main>
   );
 }

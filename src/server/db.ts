@@ -23,7 +23,12 @@ const PHONE_PATTERN = /(?:\d[\s\-.()]?){9,}\d/;
 
 let db: Database.Database | null = null;
 
-function getDb(): Database.Database {
+/**
+ * Shared SQLite connection. Exported so per-domain persistence modules
+ * (db/polls.ts, db/priceWatch.ts) reuse the same connection and create their
+ * own tables, keeping this file's schema block focused on core reports/events.
+ */
+export function getDb(): Database.Database {
   if (db) {
     return db;
   }

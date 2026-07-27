@@ -13,6 +13,11 @@ export default defineConfig({
         target: "http://127.0.0.1:8787",
         changeOrigin: false,
       },
+      // Server-rendered share pages + OG cards live on the Hono server (M4).
+      // Trailing slash is REQUIRED: a bare "/s" prefix would also capture
+      // "/src/..." (Vite's own source modules) and break the dev client.
+      "/s/": { target: "http://127.0.0.1:8787", changeOrigin: false },
+      "/og/": { target: "http://127.0.0.1:8787", changeOrigin: false },
     },
   },
   build: {

@@ -23,7 +23,7 @@ const searchStarted = z.object({
   name: z.literal("search_started"),
   query: z.string().min(1).max(500),
   mode: ResearchModeSchema,
-  entry: z.enum(["home-search", "example-chip", "history", "rerun"]),
+  entry: z.enum(["home-search", "example-chip", "history", "rerun", "share-cta", "poll"]),
 });
 
 const researchStageCompleted = z.object({
@@ -60,7 +60,7 @@ const reportFailed = z.object({
 const reportViewed = z.object({
   name: z.literal("report_viewed"),
   reportId: z.string().min(1),
-  surface: z.enum(["summary", "detail", "prices", "research"]),
+  surface: z.enum(["summary", "detail", "prices", "research", "share"]),
 });
 
 const sourceClicked = z.object({
@@ -128,6 +128,58 @@ const comparisonUsed = z.object({
   alternativesShown: z.number().int().nonnegative(),
 });
 
+/* ---- M4 growth-loop events (docs/GROWTH.md instrumentation) ---- */
+
+/** A share link was created/copied from a report. */
+const shareCreated = z.object({
+  name: z.literal("share_created"),
+  reportId: z.string().min(1),
+  surface: z.enum(["report", "compare", "prices"]),
+});
+
+/** A public share page was viewed (the visitor side of the loop). */
+const sharePageViewed = z.object({
+  name: z.literal("share_page_viewed"),
+  reportId: z.string().min(1),
+  /** True when the viewer has no prior Tally session on this device. */
+  firstTouch: z.boolean(),
+});
+
+/** Visitor→searcher: the share-page CTA to run your own research was clicked. */
+const ctaClicked = z.object({
+  name: z.literal("cta_clicked"),
+  reportId: z.string().min(1),
+  cta: z.enum(["research-your-own", "re-run"]),
+});
+
+/** A decision poll was created from a report shortlist. */
+const pollCreated = z.object({
+  name: z.literal("poll_created"),
+  pollId: z.string().min(1),
+  reportId: z.string().min(1),
+  optionCount: z.number().int().positive(),
+});
+
+/** An account-free vote was cast on a poll. */
+const pollVoted = z.object({
+  name: z.literal("poll_voted"),
+  pollId: z.string().min(1),
+});
+
+/** An account-free comment was left on a poll. */
+const pollCommented = z.object({
+  name: z.literal("poll_commented"),
+  pollId: z.string().min(1),
+});
+
+/** A price watch was set from a report (honest framing; no notification promise). */
+const priceWatchSet = z.object({
+  name: z.literal("price_watch_set"),
+  reportId: z.string().min(1),
+  /** Ranked pick watched (1 = best fit); no product identity is logged. */
+  rank: z.number().int().positive(),
+});
+
 export const EventBodySchema = z.discriminatedUnion("name", [
   searchStarted,
   researchStageCompleted,
@@ -143,6 +195,13 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   deepDiveStarted,
   pickSaved,
   comparisonUsed,
+  shareCreated,
+  sharePageViewed,
+  ctaClicked,
+  pollCreated,
+  pollVoted,
+  pollCommented,
+  priceWatchSet,
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;
 

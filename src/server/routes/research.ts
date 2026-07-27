@@ -11,6 +11,7 @@ import {
   type SeedAssumption,
 } from "../../shared/report";
 import { AnonIdSchema } from "../../shared/telemetry";
+import { createRateLimiter } from "../rateLimit";
 import { PipelineError, runResearch } from "../engine/pipeline";
 import {
   getSessionStatus,
@@ -122,36 +123,6 @@ const RATE_MAX_STARTS = 12;
 // bypassed and bounds total research spend regardless. Sized well above the
 // eval suite + realistic concurrent real usage for the single-process V1.
 const RATE_MAX_GLOBAL_STARTS = 60;
-
-interface RateLimiterOptions {
-  readonly windowMs: number;
-  readonly maxPerKey: number;
-  readonly maxGlobal: number;
-}
-
-/**
- * Two-tier sliding-window limiter. `now` is injected so the logic is pure and
- * unit-testable. A rejected start consumes neither budget.
- */
-export function createRateLimiter(opts: RateLimiterOptions) {
-  const buckets = new Map<string, number[]>();
-  let globalStarts: number[] = [];
-  return (key: string, now: number): boolean => {
-    // Global backstop first — cannot be bypassed by rotating the client-keyed
-    // fields, so it bounds total research spend regardless of per-key evasion.
-    globalStarts = globalStarts.filter((t) => now - t < opts.windowMs);
-    if (globalStarts.length >= opts.maxGlobal) return true;
-    const kept = (buckets.get(key) ?? []).filter((t) => now - t < opts.windowMs);
-    if (kept.length >= opts.maxPerKey) {
-      buckets.set(key, kept);
-      return true;
-    }
-    buckets.set(key, [...kept, now]);
-    globalStarts.push(now);
-    if (buckets.size > 10_000) buckets.clear();
-    return false;
-  };
-}
 
 const limiter = createRateLimiter({
   windowMs: RATE_WINDOW_MS,

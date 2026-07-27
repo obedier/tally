@@ -1,0 +1,71 @@
+/*
+ * Price watch — a calm, neutral affordance. Deliberately NOT the green "saved
+ * pick" treatment and never urgent: no accent-red, no pulse, no countdown.
+ * Honest re-check framing per docs/GROWTH.md.
+ */
+
+.price-watch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: start;
+  margin-top: var(--space-3);
+}
+
+.price-watch__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: start;
+  padding: 8px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-card);
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: var(--text-small);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.price-watch__button:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: var(--color-ink);
+}
+
+.price-watch__button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.price-watch__button:disabled {
+  cursor: default;
+}
+
+.price-watch__button--watching {
+  background: transparent;
+  color: var(--color-muted);
+  border-color: var(--color-line);
+}
+
+.price-watch__note {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--color-muted);
+}
+
+.price-watch__note--error {
+  color: var(--color-orange);
+}
+
+.price-watch__retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--color-line);
+  cursor: pointer;
+}

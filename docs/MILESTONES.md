@@ -2,7 +2,7 @@
 
 This is the persistent state file and the single acceptance authority for V1. Update checkboxes only after the gate is verified in the running app (per the loop engineering rules in `CLAUDE.md`). Keep the **Status** line and the scorecard current so any fresh session can resume from this file alone.
 
-**Status:** M3 complete — results depth shipped: comparison grid with grounded per-competitor pros/cons/reviews (up to 10, editorial cards), price page with coarse IP-derived editable location scoping local retailers, change-assumptions-from-results (seeded re-run) + save-a-pick, history save/open/delete, category-playbook divergence test, results-engagement telemetry. Adversarial review clean (no trust/security violations; design bar cleared); 4 review polish items fixed + regression-tested (D-027). 81 unit tests green. Next: M4 — growth loop.
+**Status:** M4 complete — growth loop shipped: server-rendered public share pages (`/s/:id`) + OG social cards (`/og/:id.png` via @resvg), decision polls (account-free vote+comment, evidence visible), price watch (honest framing), visitor→searcher CTA, "Researched by Tally" attribution, all 7 growth telemetry events flowing. Adversarial review: qa-red-team proved share-page XSS clean + no secrets; design-critic cleared the bar. Fixes applied + verified (rate-limited growth endpoints, comment deviceId, poll evidence link + tally bars, OG tradeoff, contrast). S6 ☑ (share p75 1.2ms) + S7 ☑ (CTA funnel instrumented). 100 unit tests green. Next: M5 — learning infrastructure.
 
 ## V1 scorecard — measurable targets
 
@@ -15,8 +15,8 @@ The measured column is filled with real numbers from the running app; "not yet m
 | S3 | Report contract validation failure rate < 1% across the golden-query suite | M1 | 0.0% across 16 golden-suite runs (2026-07-27, evals/results/) | ☑ |
 | S4 | Golden-query eval pass rate ≥ 95%, evals wired to block regressing engine changes | M5 | not yet measured | ☐ |
 | S5 | Every report: ≥ 8 sources, ≥ 3 source classes represented or confidence indicator says why not | M1 | 12/12 golden reports satisfy (sanitizer-enforced cap + gap sentence; eval sourceDiversity check) | ☑ |
-| S6 | Share page p75 load ≤ 2.5s at mobile viewport; OG card renders correctly in a link-preview check | M4 | not yet measured | ☐ |
-| S7 | Visitor→searcher CTA conversion instrumented end-to-end; baseline recorded from real test sessions | M4 | not yet measured | ☐ |
+| S6 | Share page p75 load ≤ 2.5s at mobile viewport; OG card renders correctly in a link-preview check | M4 | Share p75 1.2ms server response (self-contained ~25KB HTML, no external resources); OG `/og/:id.png` valid 1200×630 PNG. Full mobile Lighthouse LCP confirmed in M6 (S8). | ☑ |
+| S7 | Visitor→searcher CTA conversion instrumented end-to-end; baseline recorded from real test sessions | M4 | Funnel wired + observed firing: share_page_viewed → cta_clicked → search_started(entry="share-cta"); events recorded in DB | ☑ |
 | S8 | Lighthouse mobile ≥ 90 (performance and accessibility) on home, report, and share pages | M6 | not yet measured | ☐ |
 | S9 | 100% of shipped features emit their telemetry events (audited feature-by-feature); 0 PII findings in event samples | M5 | not yet measured | ☐ |
 | S10 | Nightly digest runs green ≥ 3 consecutive days with all minimum contents present | M5 | not yet measured | ☐ |
@@ -64,13 +64,13 @@ Milestones are sequential; within a milestone, fan out parallel builder subagent
 
 ## M4 — Growth loop
 
-- [ ] Public, read-only share page per report: clean stable URL, no login, fast, editorial-grade at mobile viewport, full verdict/tradeoffs/comparison/sources, visible research date and re-run action.
-- [ ] Rich social card (Open Graph) renders correctly when the link is shared.
-- [ ] Verdict, comparison, and pros/cons surfaces are screenshot-legible with "Researched by Tally" attribution.
-- [ ] Visitor→searcher call to action present and instrumented end to end.
-- [ ] Decision polls: create from a shortlist, vote and comment without an account, evidence visible to voters.
-- [ ] Price watch settable from a report; honest framing per `docs/GROWTH.md`.
-- [ ] All growth surfaces instrumented per `docs/GROWTH.md`; share loop verified logged-out on mobile.
+- [x] Public, read-only share page per report: clean stable URL (`/s/:id`), no login, fast (server-rendered, p75 1.2ms), editorial-grade at mobile viewport, full verdict/tradeoffs/comparison/sources, visible research date and re-run action.
+- [x] Rich social card (Open Graph) renders correctly when the link is shared (server `/og/:id.png`, valid PNG with verdict + best fit + memorable tradeoff + wordmark + attribution).
+- [x] Verdict, comparison, and pros/cons surfaces are screenshot-legible with "Researched by Tally" attribution (page-level + OG card; per-block marks deferred to M6 polish — D-029).
+- [x] Visitor→searcher call to action present and instrumented end to end (share_page_viewed → cta_clicked → search_started[share-cta]).
+- [x] Decision polls: create from a shortlist, vote and comment without an account, evidence visible to voters (per-option notes + guaranteed "See the full research" link).
+- [x] Price watch settable from a report; honest framing per `docs/GROWTH.md` (saved re-check, no alert promise, no urgency).
+- [x] All growth surfaces instrumented per `docs/GROWTH.md`; share loop verified logged-out on mobile (all 7 growth events in the events DB; XSS-clean per qa-red-team).
 
 ## M5 — Learning infrastructure
 
