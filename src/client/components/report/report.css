@@ -511,3 +511,20 @@
   color: var(--color-green);
   opacity: 0.55;
 }
+
+/* Tappable price range → retailer breakdown; #1 rank chip on the best fit. */
+.report__price--link {
+  text-decoration: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.report__price--link:hover { opacity: 0.8; }
+
+.report__rank {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-green);
+  color: var(--color-paper, #fff);
+  font-weight: 800;
+}

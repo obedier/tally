@@ -167,6 +167,30 @@ export function ResearchPage() {
   const visibleQuestions = state.questions.filter((question) => question.status !== "removed");
   const doneCount = visibleQuestions.filter((question) => question.status === "done").length;
 
+  // Honest progress: driven by real question completion (never a fake %). Early
+  // phases show a small indeterminate amount; synthesize holds near the end.
+  const progress =
+    state.phase === "done"
+      ? 1
+      : state.stage?.stage === "synthesize"
+        ? 0.92
+        : visibleQuestions.length > 0
+          ? Math.min(0.9, 0.12 + 0.78 * (doneCount / visibleQuestions.length))
+          : state.stage
+            ? 0.1
+            : 0.04;
+  // Rough remaining-time estimate derived from real elapsed vs progress — always
+  // labeled an estimate, only shown once there's enough signal to be meaningful.
+  const etaSeconds =
+    progress > 0.12 && progress < 1 && state.elapsedSeconds > 4
+      ? Math.round((state.elapsedSeconds * (1 - progress)) / progress)
+      : null;
+
+  // Cancel = stop watching and go home; the abandonment beacon fires on unmount.
+  const cancelResearch = (): void => {
+    void navigate("/", { replace: true });
+  };
+
   return (
     <main className="page research">
       <PageTop back={{ to: "/", label: "Home" }} />
@@ -195,6 +219,30 @@ export function ResearchPage() {
             ? `${state.sourceCount} sources consulted so far`
             : "Gathering sources…"}
         </p>
+
+        {isLive ? (
+          <div className="research__progress">
+            <div
+              className="research__progress-track"
+              role="progressbar"
+              aria-valuenow={Math.round(progress * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Research progress"
+            >
+              <span className="research__progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+            <div className="research__progress-meta">
+              <span className="micro-copy">
+                {etaSeconds !== null ? `~${formatElapsed(etaSeconds)} left · estimate` : "Estimating…"}
+              </span>
+              <button type="button" className="research__cancel" onClick={cancelResearch}>
+                Stop research
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {state.hoursSaved ? <TimeSavedChip estimate={state.hoursSaved} /> : null}
       </header>
 

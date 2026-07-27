@@ -94,8 +94,14 @@ function ReportSummary({ report }: { report: Report }) {
 
       <section className="report__best" aria-label="Best fit">
         <div className="report__best-head">
-          <span className="kicker">Best fit</span>
-          <span className="report__price">{bestFit.priceRange.display}</span>
+          <span className="kicker"><span className="report__rank">#1</span> Best fit</span>
+          <Link
+            className="report__price report__price--link"
+            to={`/report/${report.id}/prices`}
+            aria-label="See the retailer listings behind this price range"
+          >
+            {bestFit.priceRange.display} <span aria-hidden="true">›</span>
+          </Link>
         </div>
         <h2 className="display display--title">{bestFit.name}</h2>
         {bestFit.rating ? (

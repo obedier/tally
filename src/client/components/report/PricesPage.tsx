@@ -58,7 +58,8 @@ function Prices({ report }: { report: Report }) {
       <h1 className="display display--headline">{report.bestFit.name}</h1>
       {report.bestFit.priceRange.min !== null || report.bestFit.priceRange.max !== null ? (
         <p className="small-copy compare__intro">
-          Current range: <strong className="prices__range">{report.bestFit.priceRange.display}</strong>.
+          Current range: <strong className="prices__range">{report.bestFit.priceRange.display}</strong> —
+          the retailer listings below are what make up that range.
           Prices move — confirm the listing before you buy or visit.
         </p>
       ) : (
