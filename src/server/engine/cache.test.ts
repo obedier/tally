@@ -105,4 +105,22 @@ describe("remember -> lookupFresh round-trip", () => {
   test("miss on an unseen query returns null", () => {
     expect(lookupFresh("never asked before xyz", "full", base)).toBeNull();
   });
+
+  // Regression (user-reported 2026-07-27): a location-scoped report must never
+  // be served for a different place, and a no-location run never gets a
+  // location-scoped report.
+  test("location scopes the key — one place's report never serves another", () => {
+    const q = "quiet dishwasher";
+    remember(q, "full", report({ id: "rep_seattle", createdAt: new Date(base).toISOString() }), "Seattle, WA");
+    expect(lookupFresh(q, "full", base + HOUR_MS, "Seattle, WA")).toEqual({ reportId: "rep_seattle" });
+    expect(lookupFresh(q, "full", base + HOUR_MS, "Miami, FL")).toBeNull();
+    expect(lookupFresh(q, "full", base + HOUR_MS)).toBeNull();
+  });
+
+  test("no-location runs share the 'anywhere' scope", () => {
+    const q = "standing desk";
+    remember(q, "full", report({ id: "rep_anywhere", createdAt: new Date(base).toISOString() }));
+    expect(lookupFresh(q, "full", base + HOUR_MS)).toEqual({ reportId: "rep_anywhere" });
+    expect(cacheKey(q, "full")).toBe(cacheKey(q, "full", "  "));
+  });
 });

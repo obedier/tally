@@ -113,6 +113,8 @@ const CandidateSchema = z.object({
   name: z.string().min(1),
   priceMin: nullableNumber,
   priceMax: nullableNumber,
+  /** Average rating out of 5 when a source stated one — carried to synthesis. */
+  rating: nullableNumber,
   notes: z.union([z.string(), z.null()]).catch(null),
   reviewThemes: z.array(z.string()).catch([]),
   retailerMentions: z
@@ -329,7 +331,13 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // (short for price-sensitive electronics); quick mode is never cached. See
   // engine/cache.ts. We emit the terminal "report" event so the live/session
   // flow completes exactly as a fresh run would (session.ts treats it terminal).
-  const cacheHit = input.noCache ? null : lookupFresh(query, input.mode, Date.now());
+  // Personalized runs (user-edited assumption seeds) never read or write the
+  // shared cache — they answer one user's situation, not the shared query. The
+  // cache is location-scoped so one place's local retailers never serve another.
+  const personalized = (input.seedAssumptions?.length ?? 0) > 0;
+  const cacheScope = locationKnown ? locationLabel : undefined;
+  const cacheHit =
+    input.noCache || personalized ? null : lookupFresh(query, input.mode, Date.now(), cacheScope);
   if (cacheHit !== null) {
     const cached = getReport(cacheHit.reportId);
     if (cached !== null) {
@@ -623,9 +631,9 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // Remember this report so an identical future query reuses it while fresh
   // (no-op for quick mode, or when the caller opted out of the cache). A cache
   // write must never break the response.
-  if (!input.noCache) {
+  if (!input.noCache && !personalized) {
     try {
-      remember(query, input.mode, report);
+      remember(query, input.mode, report, cacheScope);
     } catch (err) {
       console.error("[pipeline] cache remember failed", err);
     }

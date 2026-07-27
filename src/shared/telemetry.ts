@@ -107,6 +107,13 @@ const researchAbandoned = z.object({
   elapsedMs: z.number().nonnegative(),
 });
 
+/** A live-stream source link opened mid-research (domain only — never a query). */
+const researchSourceClicked = z.object({
+  name: z.literal("research_source_clicked"),
+  researchId: z.string().min(1),
+  domain: z.string().min(1),
+});
+
 const deepDiveStarted = z.object({
   name: z.literal("deep_dive_started"),
   fromReportId: z.string().min(1),
@@ -199,6 +206,7 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   questionEdited,
   researchRedirected,
   researchAbandoned,
+  researchSourceClicked,
   deepDiveStarted,
   pickSaved,
   comparisonUsed,

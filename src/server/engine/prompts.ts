@@ -73,7 +73,7 @@ Rules:
   },
 
   evidence: {
-    version: "1.1.0",
+    version: "1.2.0",
     build: ({ query, categoryLabel, criteria, assumptions, questions, location, locationKnown, concise }: EvidencePromptArgs): string => `${PERSONA}
 
 Research task for the query: "${query}" (category: ${categoryLabel}).
@@ -92,12 +92,14 @@ ${
     }
 ${ANTI_FABRICATION_RULE}
 Report prices as plain numbers only when the search evidence actually shows them; otherwise use null.
+For each candidate, capture "rating": its average user or editorial rating out of 5 ONLY when a source states one (convert 10-point scales to 5); otherwise null — never estimate one.
+If a candidate is discontinued or has a direct successor model, say so in its "notes".
 Note explicitly where sources disagree with each other and where data looks stale or outdated.
 Include retailer URLs only when they appeared in the evidence.
 
 Respond with ONLY a JSON object (no markdown fences, no commentary before or after):
 {
-  "candidates": [ { "name": string, "priceMin": number or null, "priceMax": number or null, "currency": "USD", "reviewThemes": [ short strings summarizing what reviews agree on ], "retailerMentions": [ { "seller": string, "url": string or null } ], "notes": string or null } ],
+  "candidates": [ { "name": string, "priceMin": number or null, "priceMax": number or null, "currency": "USD", "rating": number 0-5 or null, "reviewThemes": [ short strings summarizing what reviews agree on ], "retailerMentions": [ { "seller": string, "url": string or null } ], "notes": string or null } ],
   "findings": [ { "questionId": one of the ids above, "summary": string } ],
   "disagreements": [ strings describing concrete conflicts between sources ]
 }
@@ -109,7 +111,7 @@ Order candidates best-first for this user's assumptions.${
   },
 
   synthesize: {
-    version: "1.3.0",
+    version: "1.4.0",
     build: ({ query, queryType, categoryLabel, criteria, assumptions, evidenceNotes, sourceList, location, locationKnown, concise }: SynthesizePromptArgs): string => `${PERSONA}
 
 Synthesize a final product-research report for: "${query}" (query type: ${queryType}, category: ${categoryLabel}).
@@ -139,7 +141,8 @@ Rules:
 - "retailers" lists ONLY places selling the chosen best-fit product. Never list a competitor brand's store or a competitor product's price here.
 - Retailer "url" only if the evidence contained one; otherwise null. Never invent availability; use "Check retailer" when unknown.
 - For local or online-local retailer rows, set "locality" to the coarse place the listing applies to${locationKnown === true && location !== undefined && location.trim() !== "" ? ` (e.g. "${location}")` : ""}; use null for online-only rows. Never fabricate a local store — if the evidence is online-only${locationKnown === true ? "" : " or the location is unknown"}, return online rows only and omit local ones.
-- Rating values only when evidenced; otherwise null. Review summaries describe themes, never invented counts.
+- Rating values only when evidenced; otherwise null. The evidence notes carry captured "rating" numbers per candidate — use them for "ratingValue" whenever present; do not drop them. Review summaries describe themes, never invented counts.
+- If the evidence shows the queried product is discontinued or clearly superseded by a direct successor that is the better buy for these assumptions, the best fit MUST be that successor — say so plainly in the headline — and the queried product appears as a ranked alternative with an honest note. Never keep a product as best fit merely because it was the one searched.
 - "categoryCheck": re-state the true category of the researched product now that evidence is in: { "id": "consumer-electronics" | "home-goods" | "other", "label": short label }.
 
 Respond with ONLY a JSON object in exactly this shape:

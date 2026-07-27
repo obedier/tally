@@ -70,9 +70,18 @@ function normalizeQuery(query: string): string {
     .trim();
 }
 
-/** The cache key for a query+mode: normalized query joined with the mode. Pure. */
-export function cacheKey(query: string, mode: ResearchMode): string {
-  return `${normalizeQuery(query)}::${mode}`;
+/**
+ * The cache key for a query+mode+location scope. Location-scoped reports carry
+ * local retailers for a specific place, so a report researched for one place is
+ * never served for another; runs with no known location share the "anywhere"
+ * scope. Pure.
+ */
+export function cacheKey(query: string, mode: ResearchMode, locationLabel?: string): string {
+  const scope =
+    locationLabel === undefined || normalizeQuery(locationLabel) === ""
+      ? "anywhere"
+      : normalizeQuery(locationLabel);
+  return `${normalizeQuery(query)}::${mode}::${scope}`;
 }
 
 /**
@@ -106,6 +115,7 @@ export function lookupFresh(
   query: string,
   mode: ResearchMode,
   nowMs: number,
+  locationLabel?: string,
 ): { reportId: string } | null {
   if (!CACHEABLE_MODES.has(mode)) return null;
   const db = ensureTable();
@@ -113,7 +123,7 @@ export function lookupFresh(
     .prepare<[string], CacheRow>(
       "SELECT report_id, category_id, report_created_at FROM query_cache WHERE cache_key = ?",
     )
-    .get(cacheKey(query, mode));
+    .get(cacheKey(query, mode, locationLabel));
   if (!row) return null;
   if (!isFresh(row.report_created_at, row.category_id, nowMs)) return null;
   return { reportId: row.report_id };
@@ -125,7 +135,12 @@ export function lookupFresh(
  * (see CACHEABLE_MODES). Stores the report's REAL createdAt so freshness is
  * always judged against actual research time. Latest write wins the key.
  */
-export function remember(query: string, mode: ResearchMode, report: Report): void {
+export function remember(
+  query: string,
+  mode: ResearchMode,
+  report: Report,
+  locationLabel?: string,
+): void {
   if (!CACHEABLE_MODES.has(mode)) return;
   const db = ensureTable();
   db.prepare(
@@ -136,5 +151,11 @@ export function remember(query: string, mode: ResearchMode, report: Report): voi
                    category_id = excluded.category_id,
                    report_created_at = excluded.report_created_at,
                    remembered_at = excluded.remembered_at`,
-  ).run(cacheKey(query, mode), report.id, report.category.id, report.createdAt, new Date().toISOString());
+  ).run(
+    cacheKey(query, mode, locationLabel),
+    report.id,
+    report.category.id,
+    report.createdAt,
+    new Date().toISOString(),
+  );
 }

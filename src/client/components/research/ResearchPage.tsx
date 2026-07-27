@@ -309,6 +309,15 @@ export function ResearchPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="research__source-link"
+                  onClick={() => {
+                    if (state.researchId !== null) {
+                      track({
+                        name: "research_source_clicked",
+                        researchId: state.researchId,
+                        domain: source.domain,
+                      });
+                    }
+                  }}
                 >
                   {source.title}
                 </a>
