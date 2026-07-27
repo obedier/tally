@@ -227,11 +227,30 @@ function maybeEmitBestFit(evidence: EvidenceOutput, emit: EmitFn): void {
   const top = evidence.candidates[0];
   if (top === undefined || top.name.trim() === "") return; // never fabricate a leader
   const hasPrice = top.priceMin !== null || top.priceMax !== null;
+  const backups = evidence.candidates
+    .slice(1, 3)
+    .filter((c) => c.name.trim() !== "")
+    .map((c) => ({ name: c.name.trim(), note: c.notes ?? c.reviewThemes[0] ?? null }));
   emit({
     type: "best-fit-so-far",
     name: top.name.trim(),
     priceDisplay: hasPrice ? parsePrice({ min: top.priceMin, max: top.priceMax }).display : null,
     note: top.notes ?? top.reviewThemes[0] ?? null,
+    ...(backups.length > 0 ? { backups } : {}),
+  });
+}
+
+/** Live source refs for the stream — same title/url rules as buildSources. */
+function chunksToSourceItems(
+  chunks: readonly RawChunk[],
+): { title: string; url: string; domain: string }[] {
+  return chunks.map((ch) => {
+    const domain = domainFromChunk(ch);
+    return {
+      title: ch.title.trim() === "" ? domain : ch.title.trim(),
+      url: ch.uri,
+      domain,
+    };
   });
 }
 
@@ -385,6 +404,16 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   }));
   emit({ type: "plan", questions: plan });
 
+  // Curated playbook questions the mode trim left out — one-tap additions for
+  // the user, never invented filler (no model call).
+  const plannedIds = new Set(plan.map((q) => q.id));
+  const suggestions = [...playbook.questions]
+    .sort((a, b) => b.leverage - a.leverage)
+    .filter((q) => !plannedIds.has(q.id))
+    .slice(0, 3)
+    .map((q) => ({ id: q.id, text: q.template, whyItMatters: q.whyItMatters }));
+  if (suggestions.length > 0) emit({ type: "suggested-questions", suggestions });
+
   // Mid-run controls: drained and applied at stage boundaries and between
   // evidence batches. Completed evidence is never discarded (docs/ENGINE.md).
   const drain: DrainControlsFn = input.drainControls ?? (() => []);
@@ -454,13 +483,14 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       );
       const before = usableChunks(allChunks).length;
       allChunks = [...allChunks, ...result.sources];
-      const total = usableChunks(allChunks).length;
+      const usable = usableChunks(allChunks);
+      const total = usable.length;
       const newUniqueSources = Math.max(0, total - before);
       plan = setStatus(plan, groupIds, "done", newUniqueSources);
       emit({ type: "plan", questions: plan });
-      emit({ type: "sources", count: total });
+      emit({ type: "sources", count: total, items: chunksToSourceItems(usable) });
       evidenceOutputs.push(result.data);
-      if (evidenceOutputs.length === 1) maybeEmitBestFit(result.data, emit);
+      maybeEmitBestFit(result.data, emit);
       // Deep-mode sufficiency: after batch 3, a thin batch ends the loop.
       if (
         input.mode === "deep" &&

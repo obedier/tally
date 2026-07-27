@@ -15,8 +15,13 @@ function formatDate(iso: string): string {
   return Number.isNaN(parsed.getTime()) ? "" : dateFormat.format(parsed);
 }
 
+interface RecentResearchProps {
+  /** Rows shown before the "See all" link appears; omit to show everything. */
+  limit?: number;
+}
+
 /** Saved research from GET /api/reports, with rerun + quiet two-step delete. */
-export function RecentResearch() {
+export function RecentResearch({ limit }: RecentResearchProps) {
   const navigate = useNavigate();
   const [state, setState] = useState<ListState>({ status: "loading" });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -87,7 +92,7 @@ export function RecentResearch() {
 
       {state.status === "ready" && state.items.length > 0 ? (
         <ul className="recent__list">
-          {state.items.slice(0, 10).map((item) => (
+          {(limit === undefined ? state.items : state.items.slice(0, limit)).map((item) => (
             <li key={item.id} className="recent__row">
               <Link className="recent__open" to={`/report/${item.id}`}>
                 <span className="recent__open-copy">
@@ -126,6 +131,12 @@ export function RecentResearch() {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {state.status === "ready" && limit !== undefined && state.items.length > limit ? (
+        <p className="small-copy recent__see-all">
+          <Link to="/history">See all {state.items.length} researches →</Link>
+        </p>
       ) : null}
     </section>
   );

@@ -572,3 +572,90 @@
 @media (prefers-reduced-motion: reduce) {
   .research__progress-fill { transition: none; }
 }
+
+/* --- Suggested questions (curated playbook leftovers, one-tap add) --- */
+
+.research__suggestions {
+  margin-top: var(--space-3);
+}
+
+.research__suggestions-label {
+  color: var(--color-muted);
+  margin-bottom: var(--space-2);
+}
+
+.research__suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.research__suggestion-chip {
+  padding: 6px 12px;
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: var(--text-small);
+  text-align: left;
+}
+
+.research__suggestion-chip:hover,
+.research__suggestion-chip:focus-visible {
+  border-style: solid;
+  border-color: var(--color-green);
+  color: var(--color-green);
+}
+
+/* --- Live sources consulted --- */
+
+.research__sources {
+  margin-top: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.research__sources-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.research__sources-list {
+  margin-top: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+}
+
+.research__sources-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.research__source-link {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--color-line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.research__source-domain {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+}
+
+/* --- Best-fit backups --- */
+
+.research__best-backups {
+  margin-top: var(--space-2);
+  color: var(--color-muted);
+}

@@ -32,13 +32,19 @@ export function HomePage() {
     : null;
   const [draft, setDraft] = useState(() => params.get("q")?.trim() ?? "");
   const [mode, setMode] = useState<ResearchMode>("full");
+  // Optional coarse location for local prices — off until the user opens it.
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationDraft, setLocationDraft] = useState("");
 
   const startResearch = (query: string, entry: "home-search" | "example-chip") => {
     const trimmed = query.trim();
     if (!trimmed) return;
     // A CTA arrival attributes the conversion to that source, not the local action.
     track({ name: "search_started", query: trimmed, mode, entry: ctaEntry ?? entry });
-    navigate(`/research?q=${encodeURIComponent(trimmed)}&mode=${mode}`);
+    const search = new URLSearchParams({ q: trimmed, mode });
+    const place = locationDraft.trim();
+    if (place !== "") search.set("location", place);
+    navigate(`/research?${search.toString()}`);
   };
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -91,6 +97,32 @@ export function HomePage() {
               </button>
             ))}
           </div>
+
+          {locationOpen ? (
+            <div className="home__location">
+              <label className="micro-copy home__location-label" htmlFor="home-location">
+                City or region for local prices
+              </label>
+              <input
+                id="home-location"
+                className="home__location-input"
+                type="text"
+                value={locationDraft}
+                onChange={(event) => setLocationDraft(event.target.value)}
+                placeholder="e.g. Seattle, WA"
+                autoComplete="address-level2"
+                maxLength={120}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="micro-copy home__location-toggle"
+              onClick={() => setLocationOpen(true)}
+            >
+              <span aria-hidden="true">◎</span> Set a location for local prices (optional)
+            </button>
+          )}
         </form>
 
         <p className="home__examples">
@@ -111,7 +143,7 @@ export function HomePage() {
         <img src="/product-images/linen-bedding.png" alt="" width="220" height="270" loading="lazy" />
       </div>
 
-      <RecentResearch />
+      <RecentResearch limit={10} />
     </main>
   );
 }

@@ -282,12 +282,40 @@ export const ResearchEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("sources"),
     count: z.number().int().nonnegative(),
+    /** Cumulative list of the real sources behind the count, newest last. */
+    items: z
+      .array(
+        z.object({
+          title: z.string().min(1),
+          url: z.string().url(),
+          domain: z.string().min(1),
+        }),
+      )
+      .optional(),
   }),
   z.object({
     type: z.literal("best-fit-so-far"),
     name: z.string().min(1),
     priceDisplay: z.string().nullable(),
     note: z.string().nullable(),
+    /** Runners-up currently in contention — real candidates, never padding. */
+    backups: z
+      .array(z.object({ name: z.string().min(1), note: z.string().nullable() }))
+      .optional(),
+  }),
+  z.object({
+    /**
+     * Playbook questions the mode-trimmed plan left out — offered as one-tap
+     * additions. Curated per category, never invented filler.
+     */
+    type: z.literal("suggested-questions"),
+    suggestions: z.array(
+      z.object({
+        id: z.string().min(1),
+        text: z.string().min(1),
+        whyItMatters: z.string().nullable(),
+      }),
+    ),
   }),
   z.object({
     type: z.literal("time-saved"),

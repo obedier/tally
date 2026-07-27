@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ResearchModeSchema,
@@ -74,10 +74,22 @@ export function ResearchPage() {
     .map((edit) => ({ text: edit.text.trim(), affirmed: edit.affirmed }))
     .filter((edit) => edit.text !== "");
 
+  // Completion beat: hold the finished state for a moment (progress full, "verdict
+  // ready") before opening the report — a real pause, never a fake delay mid-run.
+  const beatTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (beatTimerRef.current !== null) window.clearTimeout(beatTimerRef.current);
+    },
+    [],
+  );
   const onReport = useCallback(
     (report: Report) => {
       track({ name: "report_viewed", reportId: report.id, surface: "research" });
-      navigate(`/report/${report.id}`, { replace: true, state: { report } });
+      beatTimerRef.current = window.setTimeout(() => {
+        beatTimerRef.current = null;
+        void navigate(`/report/${report.id}`, { replace: true, state: { report } });
+      }, 1200);
     },
     [navigate],
   );
@@ -220,7 +232,7 @@ export function ResearchPage() {
             : "Gathering sources…"}
         </p>
 
-        {isLive ? (
+        {isLive || state.phase === "done" ? (
           <div className="research__progress">
             <div
               className="research__progress-track"
@@ -234,11 +246,17 @@ export function ResearchPage() {
             </div>
             <div className="research__progress-meta">
               <span className="micro-copy">
-                {etaSeconds !== null ? `~${formatElapsed(etaSeconds)} left · estimate` : "Estimating…"}
+                {state.phase === "done"
+                  ? "Verdict ready — opening your report…"
+                  : etaSeconds !== null
+                    ? `~${formatElapsed(etaSeconds)} left · estimate`
+                    : "Estimating…"}
               </span>
-              <button type="button" className="research__cancel" onClick={cancelResearch}>
-                Stop research
-              </button>
+              {isLive ? (
+                <button type="button" className="research__cancel" onClick={cancelResearch}>
+                  Stop research
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -272,10 +290,34 @@ export function ResearchPage() {
 
       <PlanEditor
         questions={state.questions}
+        suggestions={state.suggestions}
         researchId={state.researchId}
         canSteer={canSteer}
         sendControl={sendControl}
       />
+
+      {state.sourceItems.length > 0 ? (
+        <details className="research__sources">
+          <summary className="small-copy research__sources-summary">
+            See the {state.sourceCount} sources consulted so far
+          </summary>
+          <ul className="research__sources-list">
+            {[...state.sourceItems].reverse().map((source) => (
+              <li key={source.url}>
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="research__source-link"
+                >
+                  {source.title}
+                </a>
+                <span className="micro-copy research__source-domain">{source.domain}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {state.bestFit ? (
         <section className="research__best fade-in" aria-label="Best fit so far">
@@ -290,6 +332,12 @@ export function ResearchPage() {
             <p className="research__best-price">{state.bestFit.priceDisplay}</p>
           ) : null}
           {state.bestFit.note ? <p className="small-copy">{state.bestFit.note}</p> : null}
+          {state.bestFit.backups.length > 0 ? (
+            <p className="micro-copy research__best-backups">
+              Also in the running:{" "}
+              {state.bestFit.backups.map((backup) => backup.name).join(" · ")}
+            </p>
+          ) : null}
         </section>
       ) : null}
 

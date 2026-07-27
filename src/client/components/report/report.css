@@ -528,3 +528,20 @@
   color: var(--color-paper, #fff);
   font-weight: 800;
 }
+
+/* --- Ambient category art in the report lead (decor, never the product) --- */
+
+.report__ambient {
+  float: right;
+  width: 72px;
+  height: auto;
+  margin: 0 0 var(--space-2) var(--space-3);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+@media (min-width: 720px) {
+  .report__ambient {
+    width: 92px;
+  }
+}

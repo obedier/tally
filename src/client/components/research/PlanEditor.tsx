@@ -2,10 +2,11 @@ import { nanoid } from "nanoid";
 import type { PlanQuestion } from "../../../shared/report";
 import { track } from "../../lib/telemetry";
 import { AddForm } from "./AssumptionsPanel";
-import type { SendControl } from "./useResearchSession";
+import type { SendControl, SuggestedQuestion } from "./useResearchSession";
 
 interface PlanEditorProps {
   questions: PlanQuestion[];
+  suggestions: SuggestedQuestion[];
   researchId: string | null;
   canSteer: boolean;
   sendControl: SendControl;
@@ -18,8 +19,21 @@ interface PlanEditorProps {
  * Server `plan` events remain the source of truth; optimistic edits reconcile
  * on the next one.
  */
-export function PlanEditor({ questions, researchId, canSteer, sendControl }: PlanEditorProps) {
+export function PlanEditor({
+  questions,
+  suggestions,
+  researchId,
+  canSteer,
+  sendControl,
+}: PlanEditorProps) {
   const visibleQuestions = questions.filter((question) => question.status !== "removed");
+
+  // A suggestion disappears once its question is in the plan (added this run or
+  // replayed after a reconnect) — matched by normalized text.
+  const plannedTexts = new Set(questions.map((question) => question.text.trim().toLowerCase()));
+  const openSuggestions = suggestions.filter(
+    (suggestion) => !plannedTexts.has(suggestion.text.trim().toLowerCase()),
+  );
 
   const removeQuestion = async (question: PlanQuestion): Promise<void> => {
     const ok = await sendControl(
@@ -122,6 +136,23 @@ export function PlanEditor({ questions, researchId, canSteer, sendControl }: Pla
           ))}
         </ol>
       )}
+      {canSteer && visibleQuestions.length > 0 && openSuggestions.length > 0 ? (
+        <div className="research__suggestions" aria-label="Suggested questions">
+          <p className="micro-copy research__suggestions-label">Also worth checking — tap to add:</p>
+          <div className="research__suggestion-chips">
+            {openSuggestions.map((suggestion) => (
+              <button
+                key={suggestion.id}
+                type="button"
+                className="research__suggestion-chip"
+                onClick={() => void addQuestion(suggestion.text)}
+              >
+                + {suggestion.text}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {canSteer && visibleQuestions.length > 0 ? (
         <div className="research__plan-add">
           <AddForm

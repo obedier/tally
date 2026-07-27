@@ -31,6 +31,22 @@ export interface BestFitSoFar {
   name: string;
   priceDisplay: string | null;
   note: string | null;
+  /** Runners-up currently in contention — real candidates from the stream. */
+  backups: { name: string; note: string | null }[];
+}
+
+/** A real source consulted so far, streamed live from the engine. */
+export interface LiveSource {
+  title: string;
+  url: string;
+  domain: string;
+}
+
+/** A curated playbook question offered as a one-tap addition. */
+export interface SuggestedQuestion {
+  id: string;
+  text: string;
+  whyItMatters: string | null;
 }
 
 export type SessionPhase =
@@ -48,6 +64,8 @@ export interface SessionState {
   assumptions: Assumption[];
   questions: PlanQuestion[];
   sourceCount: number;
+  sourceItems: LiveSource[];
+  suggestions: SuggestedQuestion[];
   bestFit: BestFitSoFar | null;
   hoursSaved: HoursSaved | null;
   /** Terminal engine error (null for a raw connection drop). */
@@ -66,6 +84,8 @@ const INITIAL: SessionState = {
   assumptions: [],
   questions: [],
   sourceCount: 0,
+  sourceItems: [],
+  suggestions: [],
   bestFit: null,
   hoursSaved: null,
   error: null,
@@ -185,11 +205,22 @@ function applyStreamEvent(current: SessionState, event: ResearchEvent): SessionS
     case "plan":
       return { ...base, questions: event.questions };
     case "sources":
-      return { ...base, sourceCount: event.count };
+      return {
+        ...base,
+        sourceCount: event.count,
+        sourceItems: event.items ?? base.sourceItems,
+      };
+    case "suggested-questions":
+      return { ...base, suggestions: event.suggestions };
     case "best-fit-so-far":
       return {
         ...base,
-        bestFit: { name: event.name, priceDisplay: event.priceDisplay, note: event.note },
+        bestFit: {
+          name: event.name,
+          priceDisplay: event.priceDisplay,
+          note: event.note,
+          backups: event.backups ?? [],
+        },
       };
     case "time-saved":
       return { ...base, hoursSaved: event.estimate };

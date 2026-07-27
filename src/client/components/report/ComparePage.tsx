@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import type { Alternative, Report } from "../../../shared/report";
 import { track } from "../../lib/telemetry";
 import { PollCreatePanel } from "../poll/PollCreatePanel";
@@ -49,6 +49,36 @@ export function ComparePage() {
 function Comparison({ report }: { report: Report }) {
   const { bestFit } = report;
   const alternatives = [...report.alternatives].sort((a, b) => a.rank - b.rank);
+  // View lives in the URL so a shared/reloaded comparison keeps its layout.
+  const [params, setParams] = useSearchParams();
+  const view: "cards" | "table" = params.get("view") === "table" ? "table" : "cards";
+  const setView = (next: "cards" | "table"): void => {
+    const nextParams = new URLSearchParams(params);
+    if (next === "table") nextParams.set("view", "table");
+    else nextParams.delete("view");
+    setParams(nextParams, { replace: true });
+  };
+
+  const rows = [
+    {
+      rank: 1,
+      name: bestFit.name,
+      priceDisplay: bestFit.priceRange.display,
+      ratingValue: bestFit.rating?.value ?? null,
+      pros: bestFit.pros,
+      cons: bestFit.cons,
+      lead: true,
+    },
+    ...alternatives.map((alternative) => ({
+      rank: alternative.rank,
+      name: alternative.name,
+      priceDisplay: alternative.priceRange ? alternative.priceRange.display : null,
+      ratingValue: alternative.ratingValue,
+      pros: alternative.pros,
+      cons: alternative.cons,
+      lead: false,
+    })),
+  ];
 
   // Fire once per mounted comparison: the grid being opened is itself the signal.
   const emitted = useRef<string | null>(null);
@@ -68,7 +98,55 @@ function Comparison({ report }: { report: Report }) {
         research surfaced, ranked for your assumptions.
       </p>
 
-      <div className="compare__list" role="list">
+      <div className="compare__view" role="radiogroup" aria-label="Comparison layout">
+        {(["cards", "table"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={view === option}
+            className={`compare__view-option${view === option ? " compare__view-option--on" : ""}`}
+            onClick={() => setView(option)}
+          >
+            {option === "cards" ? "Cards" : "Table"}
+          </button>
+        ))}
+      </div>
+
+      {view === "table" ? (
+        <div className="compare-table-wrap">
+          <table className="compare-table">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Product</th>
+                <th scope="col">Price</th>
+                <th scope="col">Rating</th>
+                <th scope="col">Top pro</th>
+                <th scope="col">Top con</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.rank}-${row.name}`} className={row.lead ? "compare-table__lead" : ""}>
+                  <td>#{row.rank}</td>
+                  <th scope="row">{row.name}</th>
+                  <td>{row.priceDisplay ?? "—"}</td>
+                  <td>{row.ratingValue !== null ? `${row.ratingValue} / 5` : "No verified rating"}</td>
+                  <td>{row.pros[0] ?? "—"}</td>
+                  <td>{row.cons[0] ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="micro-copy compare-table__note">
+            Rows without a value show &ldquo;—&rdquo; — nothing is filled in that the
+            evidence didn&rsquo;t verify. Switch to Cards for full pros and cons.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="compare__list" role="list" hidden={view === "table"}>
         <CompareCard
           role="listitem"
           lead

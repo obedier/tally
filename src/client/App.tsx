@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { HistoryPage } from "./components/home/HistoryPage";
 import { HomePage } from "./components/home/HomePage";
 import { ResearchPage } from "./components/research/ResearchPage";
 import { ComparePage } from "./components/report/ComparePage";
@@ -22,6 +23,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/research" element={<ResearchPage />} />
+        <Route path="/history" element={<HistoryPage />} />
         <Route path="/report/:id" element={<ReportPage />} />
         <Route path="/report/:id/compare" element={<ComparePage />} />
         <Route path="/report/:id/prices" element={<PricesPage />} />
