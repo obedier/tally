@@ -1,0 +1,67 @@
+/*
+ * Tally design tokens — the only place colors, type, spacing, and motion
+ * values are defined. Every other stylesheet references these.
+ * Direction: refined editorial. Warm paper, forest-green ink, restrained
+ * rust-orange accents. Never a dashboard, never glossy AI.
+ */
+:root {
+  /* Palette */
+  --color-paper: #fbfaf7;
+  --color-ink: #171c1b;
+  --color-green: #12543b;
+  --color-green-deep: #0b2b20;
+  --color-green-soft: #799087;
+  --color-orange: #d94d18;
+  --color-line: #dedbd3;
+  --color-muted: #6e746e;
+  --color-card: #fffdf8;
+  --color-green-wash: #eef2ed;
+  --color-chip: #eceae5;
+  --color-input-border: #bcbab1;
+  --color-on-green: #fbfaf7;
+  --color-shadow: rgba(13, 31, 22, 0.06);
+  --color-shadow-soft: rgba(13, 31, 22, 0.035);
+  --color-scrim: rgba(11, 43, 32, 0.42);
+
+  /* Typography */
+  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-ui: "DM Sans", -apple-system, "Segoe UI", sans-serif;
+
+  --text-hero: clamp(2.75rem, 1.4rem + 7vw, 4.6rem);
+  --text-headline: clamp(1.75rem, 1.3rem + 2.2vw, 2.5rem);
+  --text-title: clamp(1.25rem, 1.1rem + 0.8vw, 1.55rem);
+  --text-base: 0.9375rem;
+  --text-small: 0.8125rem;
+  --text-micro: 0.6875rem;
+
+  --tracking-display: -0.045em;
+  --tracking-kicker: 0.09em;
+
+  /* Spacing rhythm */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --space-7: 3.5rem;
+  --space-section: clamp(2.5rem, 1.75rem + 4vw, 4.5rem);
+
+  /* Layout */
+  --column-max: 680px;
+  --hero-max: 860px;
+  --gutter: clamp(1.125rem, 0.75rem + 2vw, 2rem);
+
+  /* Shape + depth */
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+  --shadow-card: 0 2px 2px var(--color-shadow), 0 7px 16px var(--color-shadow-soft);
+  --shadow-sheet: 0 -8px 40px rgba(13, 31, 22, 0.16);
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration-normal: 280ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}

@@ -2,7 +2,7 @@
 
 This is the persistent state file and the single acceptance authority for V1. Update checkboxes only after the gate is verified in the running app (per the loop engineering rules in `CLAUDE.md`). Keep the **Status** line and the scorecard current so any fresh session can resume from this file alone.
 
-**Status:** M0 complete (audit, harvest inventory in `docs/DECISIONS.md`, commands filled, baseline commit made). Next: M1 — core research loop, built fresh outside the prototype per D-003.
+**Status:** M1 complete — core research loop live end-to-end (fresh app at repo root: Vite/React client + Hono server + SQLite, SSE research stream, 12/12 golden evals after fix wave, adversarial reviews addressed; see D-008..D-018). Next: M2 — live research experience.
 
 ## V1 scorecard — measurable targets
 
@@ -12,9 +12,9 @@ The measured column is filled with real numbers from the running app; "not yet m
 |---|--------|----------|----------|--------|
 | S1 | Quick mode time-to-verdict p75 ≤ 45s; Full ≤ 4 min (real Gemini, both categories) | M2 | not yet measured | ☐ |
 | S2 | First visible research activity (assumptions or plan) ≤ 3s after search; "best fit so far" ≤ 30s | M2 | not yet measured | ☐ |
-| S3 | Report contract validation failure rate < 1% across the golden-query suite | M1 | not yet measured | ☐ |
+| S3 | Report contract validation failure rate < 1% across the golden-query suite | M1 | 0.0% across 16 golden-suite runs (2026-07-27, evals/results/) | ☑ |
 | S4 | Golden-query eval pass rate ≥ 95%, evals wired to block regressing engine changes | M5 | not yet measured | ☐ |
-| S5 | Every report: ≥ 8 sources, ≥ 3 source classes represented or confidence indicator says why not | M1 | not yet measured | ☐ |
+| S5 | Every report: ≥ 8 sources, ≥ 3 source classes represented or confidence indicator says why not | M1 | 12/12 golden reports satisfy (sanitizer-enforced cap + gap sentence; eval sourceDiversity check) | ☑ |
 | S6 | Share page p75 load ≤ 2.5s at mobile viewport; OG card renders correctly in a link-preview check | M4 | not yet measured | ☐ |
 | S7 | Visitor→searcher CTA conversion instrumented end-to-end; baseline recorded from real test sessions | M4 | not yet measured | ☐ |
 | S8 | Lighthouse mobile ≥ 90 (performance and accessibility) on home, report, and share pages | M6 | not yet measured | ☐ |
@@ -36,13 +36,13 @@ Milestones are sequential; within a milestone, fan out parallel builder subagent
 
 ## M1 — Core research loop
 
-- [ ] Search accepts product, need, problem, or SKU; category inferred with no category-selection step.
-- [ ] Multi-step Gemini workflow with Google Search grounding runs server-side per `docs/ENGINE.md`; secrets server-only.
-- [ ] Structured report contract validated and sanitized server-side; frontend renders only the typed contract.
-- [ ] Report leads with a verdict (named product) or ranked shortlist (need), with sources as `{ title, url }` openable from the UI and a confidence indicator.
-- [ ] Reports stamped with playbook/prompt versions and per-stage timings.
-- [ ] Telemetry events for search and report outcomes flowing, schema-validated, privacy rules honored.
-- [ ] Initial golden-query seeds captured for both launch categories.
+- [x] Search accepts product, need, problem, or SKU; category inferred with no category-selection step.
+- [x] Multi-step Gemini workflow with Google Search grounding runs server-side per `docs/ENGINE.md`; secrets server-only.
+- [x] Structured report contract validated and sanitized server-side; frontend renders only the typed contract.
+- [x] Report leads with a verdict (named product) or ranked shortlist (need), with sources as `{ title, url }` openable from the UI and a confidence indicator.
+- [x] Reports stamped with playbook/prompt versions and per-stage timings.
+- [x] Telemetry events for search and report outcomes flowing, schema-validated, privacy rules honored.
+- [x] Initial golden-query seeds captured for both launch categories.
 
 ## M2 — Live research experience
 

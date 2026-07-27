@@ -5,3 +5,6 @@ dist/
 .env
 test-results/
 *.log
+data/
+evals/results/
+.keys.sh

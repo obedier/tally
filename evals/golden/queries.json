@@ -1,0 +1,164 @@
+{
+  "version": "1.0.0",
+  "description": "Golden-query seeds for the eval harness. Each case lists graded expected properties per docs/LEARNING.md: category inference, query type, sensible assumptions, source diversity, verdict clarity, honest uncertainty. The runner (evals/run.ts) validates the report contract (S3) and grades these expectations (S4/S5).",
+  "cases": [
+    {
+      "id": "ce-named-01",
+      "query": "Sony WH-1000XM5",
+      "mode": "quick",
+      "expect": {
+        "category": "consumer-electronics",
+        "queryType": "named-product",
+        "verdictStyle": "named-product-verdict",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["noise", "travel", "commut", "music", "call", "budget", "wireless", "comfort"]
+      }
+    },
+    {
+      "id": "ce-named-02",
+      "query": "MacBook Air M4 13 inch",
+      "mode": "full",
+      "expect": {
+        "category": "consumer-electronics",
+        "queryType": "named-product",
+        "verdictStyle": "named-product-verdict",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["battery", "portab", "budget", "work", "student", "performance", "memory", "storage"]
+      }
+    },
+    {
+      "id": "ce-need-01",
+      "query": "best budget 27 inch monitor for working from home",
+      "mode": "full",
+      "expect": {
+        "category": "consumer-electronics",
+        "queryType": "need",
+        "verdictStyle": "ranked-shortlist",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["budget", "1440", "4k", "text", "desk", "eye", "usb", "stand", "office", "productiv"]
+      }
+    },
+    {
+      "id": "ce-need-02",
+      "query": "wireless earbuds for running that won't fall out",
+      "mode": "quick",
+      "expect": {
+        "category": "consumer-electronics",
+        "queryType": "need",
+        "verdictStyle": "ranked-shortlist",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["sweat", "water", "fit", "secure", "sport", "run", "battery", "hook", "wing"]
+      }
+    },
+    {
+      "id": "ce-problem-01",
+      "query": "my wifi doesn't reach the bedroom in a 2-story house",
+      "mode": "full",
+      "expect": {
+        "category": "consumer-electronics",
+        "queryType": "problem",
+        "verdictStyle": "ranked-shortlist",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["mesh", "extender", "router", "coverage", "story", "wall", "speed", "isp"]
+      }
+    },
+    {
+      "id": "ce-sku-01",
+      "query": "B0BSHF7WHW",
+      "mode": "quick",
+      "expect": {
+        "category": "consumer-electronics",
+        "queryType": "sku",
+        "verdictStyle": "named-product-verdict",
+        "minSources": 5,
+        "minSourceClasses": 2,
+        "allowLowerDiversityIfExplained": true,
+        "assumptionHints": []
+      }
+    },
+    {
+      "id": "hg-named-01",
+      "query": "Lodge 6 quart enameled Dutch oven",
+      "mode": "quick",
+      "expect": {
+        "category": "home-goods",
+        "queryType": "named-product",
+        "verdictStyle": "named-product-verdict",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["cook", "bread", "braise", "enamel", "size", "budget", "care", "stove", "oven"]
+      }
+    },
+    {
+      "id": "hg-named-02",
+      "query": "Dyson V12 Detect Slim",
+      "mode": "full",
+      "expect": {
+        "category": "home-goods",
+        "queryType": "named-product",
+        "verdictStyle": "named-product-verdict",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["floor", "pet", "apartment", "cordless", "hair", "carpet", "storage", "battery"]
+      }
+    },
+    {
+      "id": "hg-need-01",
+      "query": "best vacuum for pet hair",
+      "mode": "full",
+      "expect": {
+        "category": "home-goods",
+        "queryType": "need",
+        "verdictStyle": "ranked-shortlist",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["pet", "hair", "carpet", "floor", "budget", "cordless", "shed", "dog", "cat"]
+      }
+    },
+    {
+      "id": "hg-need-02",
+      "query": "quiet air purifier for a small bedroom",
+      "mode": "quick",
+      "expect": {
+        "category": "home-goods",
+        "queryType": "need",
+        "verdictStyle": "ranked-shortlist",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["noise", "db", "sleep", "hepa", "room", "size", "filter", "allerg", "bedroom"]
+      }
+    },
+    {
+      "id": "hg-problem-01",
+      "query": "I wake up with back pain every morning",
+      "mode": "full",
+      "expect": {
+        "category": "home-goods",
+        "queryType": "problem",
+        "verdictStyle": "ranked-shortlist",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": ["mattress", "firm", "side", "back", "sleep", "pillow", "support", "weight", "position"]
+      }
+    },
+    {
+      "id": "hg-problem-02",
+      "query": "cast iron pan keeps rusting",
+      "mode": "quick",
+      "expect": {
+        "category": "home-goods",
+        "queryType": "problem",
+        "verdictStyle": "ranked-shortlist",
+        "minSources": 6,
+        "minSourceClasses": 2,
+        "allowLowerDiversityIfExplained": true,
+        "assumptionHints": ["season", "rust", "care", "enamel", "carbon", "clean", "oil", "maintain"]
+      }
+    }
+  ]
+}

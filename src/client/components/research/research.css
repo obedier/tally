@@ -1,0 +1,247 @@
+/* Live research — honest progress, editorial rhythm. */
+
+.research__head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.research__query {
+  overflow-wrap: break-word;
+}
+
+.research__meter {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--color-ink);
+}
+
+.research__elapsed {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.research__counts {
+  font-variant-numeric: tabular-nums;
+}
+
+.research__pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-green);
+  align-self: center;
+  animation: pulse 1.6s var(--ease-out) infinite;
+}
+
+.research__pulse--accent {
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  background: var(--color-orange);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Assumptions */
+.research__assumptions {
+  margin-top: var(--space-6);
+}
+
+.research__assumptions-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.research__review {
+  font-size: var(--text-micro);
+  font-weight: 700;
+  color: var(--color-orange);
+  border-bottom: 1px solid transparent;
+}
+
+.research__review:hover {
+  border-bottom-color: currentColor;
+}
+
+.research__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.research__chip {
+  padding: 6px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-card);
+  font-size: var(--text-small);
+}
+
+.research__chip--affirmed {
+  border-color: var(--color-green);
+  color: var(--color-green);
+}
+
+/* Plan */
+.research__plan {
+  margin-top: var(--space-6);
+}
+
+.research__plan-loading {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.research__plan-skeleton {
+  height: 46px;
+}
+
+.research__questions {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+.research__question {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.research__question--active {
+  border-left: 3px solid var(--color-green);
+  padding-left: 10px;
+  margin-left: -13px;
+}
+
+.research__marker {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-chip);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.research__question--done .research__marker {
+  background: var(--color-green);
+  color: var(--color-on-green);
+}
+
+.research__question-text {
+  font-weight: 600;
+  font-size: var(--text-base);
+  line-height: 1.35;
+}
+
+.research__question--pending .research__question-text {
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.research__question-live {
+  margin-top: 5px;
+  color: var(--color-orange);
+  font-weight: 700;
+}
+
+.research__why {
+  margin-top: 5px;
+  max-width: 40ch;
+}
+
+.research__status-label {
+  white-space: nowrap;
+  padding-top: 5px;
+}
+
+.research__question--done .research__status-label {
+  color: var(--color-green);
+  font-weight: 700;
+}
+
+/* Best fit so far */
+.research__best {
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.research__best-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.research__best-price {
+  color: var(--color-green);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* Assumptions sheet */
+.research__sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.research__sheet-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-line);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.research__sheet-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 50%;
+  color: var(--color-muted);
+}
+
+.research__sheet-mark--on {
+  background: var(--color-green);
+  border-color: var(--color-green);
+  color: var(--color-on-green);
+}
+
+.research__sheet-note {
+  margin-top: var(--space-4);
+  text-align: center;
+}

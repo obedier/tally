@@ -1,0 +1,62 @@
+/* Editorial type roles. Fonts load from @fontsource in main.tsx. */
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
+  line-height: 1.02;
+  color: var(--color-green-deep);
+  text-wrap: balance;
+}
+
+.display--hero {
+  font-size: var(--text-hero);
+}
+
+.display--headline {
+  font-size: var(--text-headline);
+  line-height: 1.08;
+}
+
+.display--title {
+  font-size: var(--text-title);
+  line-height: 1.15;
+}
+
+.kicker {
+  font-family: var(--font-ui);
+  font-size: var(--text-micro);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--color-green);
+}
+
+.kicker--accent {
+  color: var(--color-orange);
+}
+
+.body-copy {
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--color-ink);
+}
+
+.small-copy {
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.micro-copy {
+  font-size: var(--text-micro);
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+
+.serif-note {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-small);
+  color: var(--color-green-deep);
+}
