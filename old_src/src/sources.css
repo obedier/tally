@@ -1,0 +1,1 @@
+.source-list{display:grid;gap:0}.source-list a{display:grid;grid-template-columns:18px 1fr 16px;gap:10px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none;font:600 12px/1.25 "DM Sans"}.source-list a svg{width:16px;height:16px;color:var(--green)}.source-list p{margin:8px 0;color:var(--muted);font:12px/1.45 "DM Sans"}
