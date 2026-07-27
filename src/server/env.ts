@@ -11,9 +11,12 @@ import { resolve } from "node:path";
 export type EngineEnv = {
   readonly geminiApiKey: string | null;
   readonly geminiModel: string;
+  /** Cheap/fast model for the classify stage (S1 latency target). */
+  readonly geminiFastModel: string;
 };
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_FAST_MODEL = "gemini-2.5-flash-lite";
 
 /** Minimal KEY=VALUE parser for .env.local; supports comments and quotes. */
 function parseEnvFile(contents: string): Record<string, string> {
@@ -45,8 +48,10 @@ export function loadEnv(): EngineEnv {
   const local = readLocalEnvFile();
   const rawKey = process.env.GEMINI_API_KEY ?? local.GEMINI_API_KEY ?? "";
   const rawModel = process.env.GEMINI_MODEL ?? local.GEMINI_MODEL ?? "";
+  const rawFastModel = process.env.GEMINI_FAST_MODEL ?? local.GEMINI_FAST_MODEL ?? "";
   return {
     geminiApiKey: rawKey.trim() === "" ? null : rawKey.trim(),
     geminiModel: rawModel.trim() === "" ? DEFAULT_MODEL : rawModel.trim(),
+    geminiFastModel: rawFastModel.trim() === "" ? DEFAULT_FAST_MODEL : rawFastModel.trim(),
   };
 }

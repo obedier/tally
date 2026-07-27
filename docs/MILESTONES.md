@@ -10,8 +10,8 @@ The measured column is filled with real numbers from the running app; "not yet m
 
 | # | Target | Owned by | Measured | Status |
 |---|--------|----------|----------|--------|
-| S1 | Quick mode time-to-verdict p75 ≤ 45s; Full ≤ 4 min (real Gemini, both categories) | M2 | not yet measured | ☐ |
-| S2 | First visible research activity (assumptions or plan) ≤ 3s after search; "best fit so far" ≤ 30s | M2 | not yet measured | ☐ |
+| S1 | Quick mode time-to-verdict p75 ≤ 45s; Full ≤ 4 min (real Gemini, both categories) | M2 | Full p75 152s ≤240s ☑; Quick unsteered 33–44s (3 golden), steered runs +1 batch push p75 ~77s — see D-024 | ◐ |
+| S2 | First visible research activity (assumptions or plan) ≤ 3s after search; "best fit so far" ≤ 30s | M2 | assumptions event 2.1s ✓; best-fit-so-far after batch 1 (~17–27s) ✓ | ☑ |
 | S3 | Report contract validation failure rate < 1% across the golden-query suite | M1 | 0.0% across 16 golden-suite runs (2026-07-27, evals/results/) | ☑ |
 | S4 | Golden-query eval pass rate ≥ 95%, evals wired to block regressing engine changes | M5 | not yet measured | ☐ |
 | S5 | Every report: ≥ 8 sources, ≥ 3 source classes represented or confidence indicator says why not | M1 | 12/12 golden reports satisfy (sanitizer-enforced cap + gap sentence; eval sourceDiversity check) | ☑ |

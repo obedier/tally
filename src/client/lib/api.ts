@@ -1,9 +1,13 @@
 import { z } from "zod";
 import {
   ReportSchema,
+  ResearchErrorSchema,
   ResearchEventSchema,
   ResearchResponseSchema,
+  StartSessionResponseSchema,
   type Report,
+  type ResearchControl,
+  type ResearchError,
   type ResearchEvent,
   type ResearchMode,
 } from "../../shared/report";
@@ -24,6 +28,17 @@ export class ApiError extends Error {
 export class ReportNotFoundError extends ApiError {
   constructor() {
     super("Report not found", 404);
+  }
+}
+
+/** A structured engine error (a parsed ResearchError body) surfaced as an exception. */
+export class ResearchRequestError extends ApiError {
+  readonly code: ResearchError["code"];
+  readonly retryable: boolean;
+  constructor(error: ResearchError, status: number) {
+    super(error.message, status);
+    this.code = error.code;
+    this.retryable = error.retryable;
   }
 }
 
@@ -51,6 +66,15 @@ async function readJson(response: Response): Promise<unknown> {
     return (await response.json()) as unknown;
   } catch {
     throw new ApiError("The server returned an unreadable response.", response.status);
+  }
+}
+
+/** Like readJson but never throws — error paths often carry empty bodies. */
+async function readJsonQuietly(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
   }
 }
 
@@ -96,14 +120,73 @@ export async function deleteReport(id: string): Promise<void> {
   }
 }
 
-export interface ResearchStreamOptions {
+/* ------------------------------------------------------------------ */
+/* Live research sessions                                              */
+/* ------------------------------------------------------------------ */
+
+export interface StartSessionRequest {
   query: string;
   mode: ResearchMode;
   sessionId: string;
   deviceId: string;
-  onEvent: (event: ResearchEvent) => void;
-  /** Fired when the stream drops before a terminal `report`/`error` event. */
-  onStreamFailure: () => void;
+}
+
+/** POST /api/research/session — starts a live session, returns its researchId. */
+export async function startResearchSession(request: StartSessionRequest): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch("/api/research/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    });
+  } catch {
+    throw new ApiError(
+      "Tally couldn't reach the research engine. Check your connection and try again.",
+      0,
+    );
+  }
+  const json = await readJsonQuietly(response);
+  const started = StartSessionResponseSchema.safeParse(json);
+  if (response.ok && started.success) return started.data.researchId;
+  const failure = ResearchErrorSchema.safeParse(json);
+  if (failure.success) throw new ResearchRequestError(failure.data, response.status);
+  if (response.status === 429) {
+    throw new ResearchRequestError(
+      {
+        ok: false,
+        code: "rate-limited",
+        message: "Tally is busy right now. Give it a moment, then try again.",
+        retryable: true,
+      },
+      429,
+    );
+  }
+  throw new ApiError("The research session could not be started.", response.status);
+}
+
+function sessionEventsUrl(researchId: string): string {
+  return `/api/research/session/${encodeURIComponent(researchId)}/events`;
+}
+
+export type SessionProbe = "ok" | "missing" | "unreachable";
+
+/**
+ * EventSource hides HTTP status codes, so a garbage-collected session (404)
+ * looks identical to a network blip. This probe fetches the stream endpoint
+ * once, reads only the status, and cancels the body immediately.
+ */
+export async function probeResearchSession(researchId: string): Promise<SessionProbe> {
+  try {
+    const response = await fetch(sessionEventsUrl(researchId), {
+      headers: { accept: "text/event-stream" },
+    });
+    void response.body?.cancel();
+    if (response.status === 404) return "missing";
+    return response.ok ? "ok" : "unreachable";
+  } catch {
+    return "unreachable";
+  }
 }
 
 const EVENT_NAMES = [
@@ -112,24 +195,31 @@ const EVENT_NAMES = [
   "plan",
   "sources",
   "best-fit-so-far",
+  "time-saved",
+  "control-applied",
   "report",
   "error",
 ] as const;
 
+export interface SessionStreamHandlers {
+  onEvent: (event: ResearchEvent) => void;
+  /**
+   * Fired on every connection error. EventSource keeps auto-reconnecting (the
+   * server replays prior events on reconnect) until the caller closes it —
+   * the caller owns the give-up policy.
+   */
+  onConnectionError: () => void;
+}
+
 /**
- * Opens the live research SSE stream. Handles both SSE conventions: default
- * `message` events carrying `{ type }` payloads, and named events. Returns a
- * close function; the stream is closed automatically after a terminal event.
+ * Opens the session SSE stream (GET /api/research/session/:id/events). The
+ * server replays all prior events on connect, then streams live. Handles both
+ * SSE conventions: default `message` events carrying `{ type }` payloads, and
+ * named events. Returns a close function; the stream is closed automatically
+ * after a terminal `report`/`error` event.
  */
-export function openResearchStream(options: ResearchStreamOptions): () => void {
-  const params = new URLSearchParams({
-    query: options.query,
-    mode: options.mode,
-    sessionId: options.sessionId,
-    deviceId: options.deviceId,
-  });
-  const source = new EventSource(`/api/research/stream?${params.toString()}`);
-  let terminal = false;
+export function openSessionStream(researchId: string, handlers: SessionStreamHandlers): () => void {
+  const source = new EventSource(sessionEventsUrl(researchId));
   let closed = false;
 
   const close = (): void => {
@@ -156,10 +246,9 @@ export function openResearchStream(options: ResearchStreamOptions): () => void {
     const parsed = ResearchEventSchema.safeParse(data);
     if (!parsed.success) return;
     if (parsed.data.type === "report" || parsed.data.type === "error") {
-      terminal = true;
       close();
     }
-    options.onEvent(parsed.data);
+    handlers.onEvent(parsed.data);
   };
 
   source.onmessage = (event) => handlePayload(event.data as string, "message");
@@ -169,10 +258,31 @@ export function openResearchStream(options: ResearchStreamOptions): () => void {
     });
   }
   source.onerror = () => {
-    if (terminal || closed) return;
-    close();
-    options.onStreamFailure();
+    if (closed) return;
+    handlers.onConnectionError();
   };
 
   return close;
+}
+
+/** POST /api/research/session/:id/control — apply a mid-run steering change. */
+export async function postResearchControl(
+  researchId: string,
+  control: ResearchControl,
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/research/session/${encodeURIComponent(researchId)}/control`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(control),
+    });
+  } catch {
+    throw new ApiError("The change didn't reach the engine — check your connection.", 0);
+  }
+  if (response.ok) return;
+  const json = await readJsonQuietly(response);
+  const failure = ResearchErrorSchema.safeParse(json);
+  if (failure.success) throw new ResearchRequestError(failure.data, response.status);
+  throw new ApiError("The change couldn't be applied.", response.status);
 }

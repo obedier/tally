@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Report, ResearchMode } from "../../../shared/report";
+import { track } from "../../lib/telemetry";
 import { ErrorState, PageTop, ReportMissing } from "../ui/States";
 import { SourcesSheet } from "./SourcesSheet";
 import { useReport, useReportViewed } from "./useReport";
@@ -39,10 +40,18 @@ export function ReportPage() {
 }
 
 function ReportSummary({ report }: { report: Report }) {
+  const navigate = useNavigate();
   const [reasonOpen, setReasonOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const { verdict, bestFit } = report;
   const keyAlternative = report.alternatives.find((alternative) => alternative.isKeyAlternative) ?? null;
+
+  // Deep dive starts a NEW live session on the same query; the research page
+  // owns the session POST — this action only navigates with intent recorded.
+  const startDeepDive = (): void => {
+    track({ name: "deep_dive_started", fromReportId: report.id });
+    navigate(`/research?${new URLSearchParams({ q: report.query, mode: "deep" }).toString()}`);
+  };
 
   return (
     <main className="page report">
@@ -146,13 +155,23 @@ function ReportSummary({ report }: { report: Report }) {
         ) : null}
         <Link className="report__link" to={`/report/${report.id}/prices`}>
           {report.retailers.length > 0
-            ? `See ${report.retailers.length} retailer listings`
+            ? `See ${report.retailers.length} retailer ${report.retailers.length === 1 ? "listing" : "listings"}`
             : "See retailer availability"}{" "}
           <span aria-hidden="true">→</span>
         </Link>
         <button type="button" className="report__link" onClick={() => setSourcesOpen(true)}>
           Sources · {report.sources.length} <span aria-hidden="true">↗</span>
         </button>
+        {report.meta.mode !== "deep" ? (
+          <>
+            <button type="button" className="report__link" onClick={startDeepDive}>
+              Go deeper on this <span aria-hidden="true">→</span>
+            </button>
+            <p className="micro-copy">
+              Deep dive: Tally keeps researching until the evidence is conclusive.
+            </p>
+          </>
+        ) : null}
       </nav>
 
       {report.assumptions.length > 0 ? (

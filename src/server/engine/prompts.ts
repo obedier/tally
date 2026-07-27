@@ -18,6 +18,8 @@ export type EvidencePromptArgs = {
   readonly criteria: readonly string[];
   readonly assumptions: readonly string[];
   readonly questions: readonly { readonly id: string; readonly text: string }[];
+  /** Quick mode: fewer candidates, terse findings (S2 latency budget). */
+  readonly concise?: boolean;
 };
 
 export type SynthesizePromptArgs = {
@@ -28,6 +30,8 @@ export type SynthesizePromptArgs = {
   readonly assumptions: readonly string[];
   readonly evidenceNotes: string;
   readonly sourceList: string;
+  /** Quick mode: at most 5 alternatives, short texts (S2 latency budget). */
+  readonly concise?: boolean;
 };
 
 const bullets = (items: readonly string[]): string =>
@@ -59,8 +63,8 @@ Rules:
   },
 
   evidence: {
-    version: "1.0.0",
-    build: ({ query, categoryLabel, criteria, assumptions, questions }: EvidencePromptArgs): string => `${PERSONA}
+    version: "1.1.0",
+    build: ({ query, categoryLabel, criteria, assumptions, questions, concise }: EvidencePromptArgs): string => `${PERSONA}
 
 Research task for the query: "${query}" (category: ${categoryLabel}).
 
@@ -83,12 +87,16 @@ Respond with ONLY a JSON object (no markdown fences, no commentary before or aft
   "findings": [ { "questionId": one of the ids above, "summary": string } ],
   "disagreements": [ strings describing concrete conflicts between sources ]
 }
-Order candidates best-first for this user's assumptions.`,
+Order candidates best-first for this user's assumptions.${
+      concise === true
+        ? "\nThis is a QUICK scan: include at most 5 candidates and keep every finding summary and note to one terse sentence."
+        : ""
+    }`,
   },
 
   synthesize: {
-    version: "1.1.0",
-    build: ({ query, queryType, categoryLabel, criteria, assumptions, evidenceNotes, sourceList }: SynthesizePromptArgs): string => `${PERSONA}
+    version: "1.2.0",
+    build: ({ query, queryType, categoryLabel, criteria, assumptions, evidenceNotes, sourceList, concise }: SynthesizePromptArgs): string => `${PERSONA}
 
 Synthesize a final product-research report for: "${query}" (query type: ${queryType}, category: ${categoryLabel}).
 
@@ -122,7 +130,11 @@ Respond with ONLY a JSON object in exactly this shape:
   "alternatives": [ up to 10 of { "name": string, "priceMin": number or null, "priceMax": number or null, "priceDisplay": string or null, "ratingValue": number 0-5 or null, "note": one-sentence tradeoff, "isKeyAlternative": boolean } ],
   "retailers": [ { "seller": string, "kind": "online" | "local" | "online-local", "priceMin": number or null, "priceMax": number or null, "priceDisplay": string or null, "availability": string, "url": string or null } ],
   "disagreements": [ strings ]
-}`,
+}${
+      concise === true
+        ? "\nThis is a QUICK report: include at most 5 alternatives and keep every prose field to one or two short sentences."
+        : ""
+    }`,
   },
 } as const;
 

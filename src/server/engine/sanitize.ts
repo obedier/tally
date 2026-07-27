@@ -7,6 +7,7 @@ import {
   type Assumption,
   type CategoryId,
   type Confidence,
+  type HoursSaved,
   type PlanQuestion,
   type PriceRange,
   type ProductPick,
@@ -303,6 +304,8 @@ export type AssembleInput = {
   /** Raw parsed JSON from the synthesize stage. */
   readonly synthesis: unknown;
   readonly rawSources: readonly RawChunk[];
+  /** Honest estimate derived by the pipeline from real observables; null when unavailable. */
+  readonly hoursSaved?: HoursSaved | null;
   readonly meta: {
     readonly model: string;
     readonly mode: ResearchMode;
@@ -327,13 +330,19 @@ export function assembleReport(input: AssembleInput): Report {
   const verdictBase = buildVerdict(synth.verdict);
   const verdict = enforceSourceDiversity(verdictBase, sources.length, classes);
   const bestFit = buildBestFit(synth.bestFit, knownSourceIds, verdictBase.rationale);
-  const disagreements = [
-    ...new Set(
-      [...input.meta.evidenceDisagreements, ...strArr(synth.disagreements, 10)]
-        .map((s) => s.trim())
-        .filter((s) => s !== ""),
-    ),
-  ].slice(0, 10);
+  // Near-duplicate dedupe: evidence batches and synthesis often restate the
+  // same conflict with slightly different tails; key on a normalized prefix.
+  const seenDisagreementKeys = new Set<string>();
+  const disagreements = [...input.meta.evidenceDisagreements, ...strArr(synth.disagreements, 10)]
+    .map((s) => s.trim())
+    .filter((s) => {
+      if (s === "") return false;
+      const key = s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 90);
+      if (seenDisagreementKeys.has(key)) return false;
+      seenDisagreementKeys.add(key);
+      return true;
+    })
+    .slice(0, 10);
 
   // Post-evidence category correction: when classification was uncertain
   // (e.g. a bare SKU), the synthesize stage re-states the category with
@@ -360,8 +369,7 @@ export function assembleReport(input: AssembleInput): Report {
   const report: Report = {
     id: input.reportId,
     query: input.query,
-    // Populated by the pipeline's honest estimate once M2 wiring lands.
-    hoursSaved: null,
+    hoursSaved: input.hoursSaved ?? null,
     queryType: input.queryType,
     category,
     createdAt: input.createdAt,

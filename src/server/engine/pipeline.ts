@@ -6,6 +6,7 @@ import {
   type Assumption,
   type PlanQuestion,
   type Report,
+  type ResearchControl,
   type ResearchError,
   type ResearchEvent,
   type ResearchMode,
@@ -14,6 +15,12 @@ import {
 import { PLAYBOOKS, questionsForMode, type Playbook } from "../../shared/playbooks";
 import { loadEnv } from "../env";
 import { callGemini, extractJson, GeminiError } from "../gemini";
+import {
+  affirmedAssumptionTexts,
+  applyControls,
+  deriveHoursSaved,
+  shouldStopDeepEvidence,
+} from "./controls";
 import { PROMPTS, promptVersions } from "./prompts";
 import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
 import { domainFromChunk, usableChunks, type RawChunk } from "./sources";
@@ -21,16 +28,20 @@ import { saveReport, saveServerEvent } from "../db";
 
 /**
  * Multi-step research workflow per docs/ENGINE.md:
- * classify (ungrounded JSON) -> plan (no model call) -> evidence (grounded,
- * 1 call quick / up to 3 full+deep, sequential) -> synthesize (ungrounded
- * JSON over accumulated evidence) -> sanitize + assemble (pure, validated).
+ * classify (ungrounded JSON, fast model) -> plan (no model call) -> evidence
+ * (grounded, sequential; quick=1 batch, full<=3, deep<=5 with a sufficiency
+ * heuristic) -> synthesize (ungrounded JSON over accumulated evidence) ->
+ * sanitize + assemble (pure, validated). Pending mid-run controls (drained via
+ * `drainControls`) are applied at stage boundaries and between evidence
+ * batches; completed evidence is never discarded.
  * Emits ResearchEvent progress and records telemetry via the db seam.
  */
 
 const FALLBACK_ANON_ID = "server-side-00";
-const EVIDENCE_CALLS: Record<ResearchMode, number> = { quick: 1, full: 3, deep: 3 };
+const EVIDENCE_BATCH_LIMITS: Record<ResearchMode, number> = { quick: 1, full: 3, deep: 5 };
 
 export type EmitFn = (event: ResearchEvent) => void;
+export type DrainControlsFn = () => ResearchControl[];
 
 export type ResearchInput = {
   readonly query: string;
@@ -38,6 +49,10 @@ export type ResearchInput = {
   readonly sessionId?: string;
   readonly deviceId?: string;
   readonly emit?: EmitFn;
+  /** Live-session id; defaults to the report id for non-session runs. */
+  readonly researchId?: string;
+  /** Returns (and clears) any user controls queued since the last drain. */
+  readonly drainControls?: DrainControlsFn;
 };
 
 export class PipelineError extends Error {
@@ -264,16 +279,29 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     }
   };
 
-  // 1. Classify (one ungrounded JSON call).
+  // 1. Classify (one ungrounded JSON call on the fast model; one fallback to
+  // the main model on any fast-model error — S1 latency target).
   const classify: ClassifyOutput = await runStage("classify", async () => {
-    const res = await callGemini(
-      { apiKey, model, prompt: PROMPTS.classify.build({ query }), grounded: false },
-      (text) => ClassifySchema.parse(extractJson(text)),
-    );
-    return { value: res.data, retries: res.retries };
+    const classifyOnce = async (m: string) =>
+      callGemini(
+        { apiKey, model: m, prompt: PROMPTS.classify.build({ query }), grounded: false },
+        (text) => ClassifySchema.parse(extractJson(text)),
+      );
+    try {
+      const res = await classifyOnce(env.geminiFastModel);
+      return { value: res.data, retries: res.retries };
+    } catch (err) {
+      if (env.geminiFastModel === model) throw err;
+      console.error(
+        "[pipeline] fast-model classify failed; falling back to main model",
+        err instanceof Error ? err.message : err,
+      );
+      const res = await classifyOnce(model);
+      return { value: res.data, retries: res.retries + 1 };
+    }
   });
 
-  const assumptions: Assumption[] = classify.assumptions
+  let assumptions: Assumption[] = classify.assumptions
     .map((s) => s.trim())
     .filter((s) => s !== "")
     .slice(0, 5)
@@ -289,15 +317,44 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   }));
   emit({ type: "plan", questions: plan });
 
-  // 3. Evidence (grounded, sequential; quick=1 call, full/deep<=3).
-  const groups = chunkEvenly(plan, EVIDENCE_CALLS[input.mode]);
-  const assumptionTexts = assumptions.map((a) => a.text);
+  // Mid-run controls: drained and applied at stage boundaries and between
+  // evidence batches. Completed evidence is never discarded (docs/ENGINE.md).
+  const drain: DrainControlsFn = input.drainControls ?? (() => []);
+  const researchId = input.researchId ?? reportId;
+  let remaining: PlanQuestion[][] = [];
+  const applyPendingControls = (): void => {
+    const controls = drain();
+    if (controls.length === 0) return;
+    const outcome = applyControls({ plan, assumptions, remaining }, controls);
+    plan = [...outcome.state.plan];
+    assumptions = [...outcome.state.assumptions];
+    remaining = outcome.state.remaining.map((g) => [...g]);
+    if (outcome.assumptionsChanged) emit({ type: "assumptions", assumptions });
+    if (outcome.planChanged) emit({ type: "plan", questions: plan });
+    for (const a of outcome.applied) {
+      emit({ type: "control-applied", controlId: a.controlId, detail: a.detail });
+    }
+    if (outcome.applied.length > 0) {
+      recordServerEvent(ids, {
+        name: "research_redirected",
+        researchId,
+        stage: ctx.stage,
+        controlsApplied: outcome.applied.length,
+      });
+    }
+  };
+
+  // 3. Evidence (grounded, sequential; quick=1 batch, full<=3, deep<=5 with
+  // an early-stop sufficiency heuristic).
+  remaining = chunkEvenly(plan, EVIDENCE_BATCH_LIMITS[input.mode]);
   const evidenceOutputs: EvidenceOutput[] = [];
   let allChunks: RawChunk[] = [];
   let evidenceFailures = 0;
+  let batchIndex = 0;
 
-  for (const [i, group] of groups.entries()) {
-    const stageName = `evidence-${i + 1}`;
+  const runEvidenceBatch = async (group: PlanQuestion[]): Promise<void> => {
+    batchIndex += 1;
+    const stageName = `evidence-${batchIndex}`;
     const groupIds = new Set(group.map((q) => q.id));
     plan = setStatus(plan, groupIds, "active");
     emit({ type: "plan", questions: plan });
@@ -314,8 +371,9 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
                 query,
                 categoryLabel,
                 criteria: playbook.criteria,
-                assumptions: assumptionTexts,
+                assumptions: affirmedAssumptionTexts(assumptions),
                 questions: group.map((q) => ({ id: q.id, text: q.text })),
+                concise: input.mode === "quick",
               }),
             },
             (text) => EvidenceSchema.parse(extractJson(text)),
@@ -327,24 +385,62 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       const before = usableChunks(allChunks).length;
       allChunks = [...allChunks, ...result.sources];
       const total = usableChunks(allChunks).length;
-      plan = setStatus(plan, groupIds, "done", Math.max(0, total - before));
+      const newUniqueSources = Math.max(0, total - before);
+      plan = setStatus(plan, groupIds, "done", newUniqueSources);
       emit({ type: "plan", questions: plan });
       emit({ type: "sources", count: total });
       evidenceOutputs.push(result.data);
       if (evidenceOutputs.length === 1) maybeEmitBestFit(result.data, emit);
+      // Deep-mode sufficiency: after batch 3, a thin batch ends the loop.
+      if (
+        input.mode === "deep" &&
+        remaining.length > 0 &&
+        shouldStopDeepEvidence(evidenceOutputs.length, newUniqueSources)
+      ) {
+        console.error(
+          `[pipeline] deep evidence judged sufficient after ${evidenceOutputs.length} batches (+${newUniqueSources} new sources); skipping ${remaining.length} remaining batch(es)`,
+        );
+        remaining = [];
+      }
     } catch (err) {
       // One failed evidence group is survivable; S5 caps confidence honestly.
       evidenceFailures += 1;
       plan = setStatus(plan, groupIds, "pending");
       emit({ type: "plan", questions: plan });
-      console.error(`[pipeline] evidence group ${i + 1} failed`, err instanceof Error ? err.message : err);
+      console.error(`[pipeline] evidence batch ${batchIndex} failed`, err instanceof Error ? err.message : err);
     }
+  };
+
+  while (remaining.length > 0) {
+    applyPendingControls();
+    const group = remaining[0];
+    remaining = remaining.slice(1);
+    if (group === undefined || group.length === 0) continue;
+    await runEvidenceBatch(group);
   }
+
+  // Final boundary: controls that arrived after the last batch. User-added
+  // questions that missed the evidence loop get ONE extra small grounded batch.
+  ctx.stage = "evidence-boundary";
+  applyPendingControls();
+  const leftoverUserQuestions = remaining
+    .flat()
+    .filter((q) => q.status === "pending" && q.origin === "user");
+  remaining = [];
+  if (leftoverUserQuestions.length > 0) {
+    await runEvidenceBatch(leftoverUserQuestions);
+  }
+
   if (evidenceOutputs.length === 0) {
     ctx.stage = "evidence";
     throw new PipelineError("research-failed", "Evidence gathering failed. Nothing was fabricated — please retry.", true);
   }
   if (evidenceFailures > 0) ctx.retried = true;
+
+  // Honest time-saved estimate from real observables only.
+  const answeredQuestions = plan.filter((q) => q.status === "done").length;
+  const hoursSaved = deriveHoursSaved(answeredQuestions, usableChunks(allChunks).length);
+  if (hoursSaved !== null) emit({ type: "time-saved", estimate: hoursSaved });
 
   // 4. Synthesize (one ungrounded JSON call over evidence + source list).
   const chunks = usableChunks(allChunks);
@@ -372,9 +468,10 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
           queryType: classify.queryType,
           categoryLabel,
           criteria: playbook.criteria,
-          assumptions: assumptionTexts,
+          assumptions: affirmedAssumptionTexts(assumptions),
           evidenceNotes,
           sourceList,
+          concise: input.mode === "quick",
         }),
       },
       (text) => {
@@ -400,6 +497,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     questions: plan,
     synthesis,
     rawSources: chunks,
+    hoursSaved,
     meta: {
       model,
       mode: input.mode,
