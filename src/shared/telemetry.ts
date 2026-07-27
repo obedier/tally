@@ -180,6 +180,13 @@ const priceWatchSet = z.object({
   rank: z.number().int().positive(),
 });
 
+/** Thumbs up/down on a report — direct quality signal for query mining (M5). */
+const reportFeedback = z.object({
+  name: z.literal("report_feedback"),
+  reportId: z.string().min(1),
+  rating: z.enum(["up", "down"]),
+});
+
 export const EventBodySchema = z.discriminatedUnion("name", [
   searchStarted,
   researchStageCompleted,
@@ -202,6 +209,7 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   pollVoted,
   pollCommented,
   priceWatchSet,
+  reportFeedback,
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;
 

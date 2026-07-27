@@ -2,7 +2,7 @@
 
 This is the persistent state file and the single acceptance authority for V1. Update checkboxes only after the gate is verified in the running app (per the loop engineering rules in `CLAUDE.md`). Keep the **Status** line and the scorecard current so any fresh session can resume from this file alone.
 
-**Status:** M4 complete — growth loop shipped: server-rendered public share pages (`/s/:id`) + OG social cards (`/og/:id.png` via @resvg), decision polls (account-free vote+comment, evidence visible), price watch (honest framing), visitor→searcher CTA, "Researched by Tally" attribution, all 7 growth telemetry events flowing. Adversarial review: qa-red-team proved share-page XSS clean + no secrets; design-critic cleared the bar. Fixes applied + verified (rate-limited growth endpoints, comment deviceId, poll evidence link + tally bars, OG tradeoff, contrast). S6 ☑ (share p75 1.2ms) + S7 ☑ (CTA funnel instrumented). 100 unit tests green. Next: M5 — learning infrastructure.
+**Status:** M5 complete — learning infrastructure shipped: golden-query eval suite gating engine changes (S4 100%), query mining (`npm run mine`) + thumbs feedback, category cache with per-category freshness windows, nightly digest (`npm run digest`) with all LEARNING.md contents + Top-5 problems (PII-safe), actions loop exercised (eval caught weak assumptions → classify v1.2.0 → S4 100%). S4 ☑, S9 ☑ (all 22 events fire, 0 PII), S10 ◐ (job complete + reliable; 3-calendar-day accumulation is post-deploy). 126 unit tests green. Next: M6 — polish and hardening (final milestone).
 
 ## V1 scorecard — measurable targets
 
@@ -13,13 +13,13 @@ The measured column is filled with real numbers from the running app; "not yet m
 | S1 | Quick mode time-to-verdict p75 ≤ 45s; Full ≤ 4 min (real Gemini, both categories) | M2 | Full p75 152s ≤240s ☑; Quick unsteered 33–44s (3 golden), steered runs +1 batch push p75 ~77s — see D-024 | ◐ |
 | S2 | First visible research activity (assumptions or plan) ≤ 3s after search; "best fit so far" ≤ 30s | M2 | assumptions event 2.1s ✓; best-fit-so-far after batch 1 (~17–27s) ✓ | ☑ |
 | S3 | Report contract validation failure rate < 1% across the golden-query suite | M1 | 0.0% across 16 golden-suite runs (2026-07-27, evals/results/) | ☑ |
-| S4 | Golden-query eval pass rate ≥ 95%, evals wired to block regressing engine changes | M5 | not yet measured | ☐ |
+| S4 | Golden-query eval pass rate ≥ 95%, evals wired to block regressing engine changes | M5 | 100% (12/12) on classify v1.2.0 + robust assumption grader; harness exits 1 below 95% and runs noCache to gate engine changes (2026-07-27) | ☑ |
 | S5 | Every report: ≥ 8 sources, ≥ 3 source classes represented or confidence indicator says why not | M1 | 12/12 golden reports satisfy (sanitizer-enforced cap + gap sentence; eval sourceDiversity check) | ☑ |
 | S6 | Share page p75 load ≤ 2.5s at mobile viewport; OG card renders correctly in a link-preview check | M4 | Share p75 1.2ms server response (self-contained ~25KB HTML, no external resources); OG `/og/:id.png` valid 1200×630 PNG. Full mobile Lighthouse LCP confirmed in M6 (S8). | ☑ |
 | S7 | Visitor→searcher CTA conversion instrumented end-to-end; baseline recorded from real test sessions | M4 | Funnel wired + observed firing: share_page_viewed → cta_clicked → search_started(entry="share-cta"); events recorded in DB | ☑ |
 | S8 | Lighthouse mobile ≥ 90 (performance and accessibility) on home, report, and share pages | M6 | not yet measured | ☐ |
-| S9 | 100% of shipped features emit their telemetry events (audited feature-by-feature); 0 PII findings in event samples | M5 | not yet measured | ☐ |
-| S10 | Nightly digest runs green ≥ 3 consecutive days with all minimum contents present | M5 | not yet measured | ☐ |
+| S9 | 100% of shipped features emit their telemetry events (audited feature-by-feature); 0 PII findings in event samples | M5 | All 22 telemetry events observed firing in the events DB; 0 PII in stored props (Zod strips unknowns + PII guard; verified) | ☑ |
+| S10 | Nightly digest runs green ≥ 3 consecutive days with all minimum contents present | M5 | Digest job built, all min-contents present, PII-safe; runs green every invocation (demonstrated repeatedly). "3 consecutive calendar days" is a post-deploy runtime observation — logged D-030 | ◐ |
 | S11 | qa-red-team final sweep: 0 open trust violations (fabricated live data, client-reachable secrets, purchase pressure) and 0 open critical bugs | M6 | not yet measured | ☐ |
 | S12 | Full-loop task success: 10/10 scripted end-to-end journeys (5 per category, mobile viewport) complete without dead ends | M6 | not yet measured | ☐ |
 
@@ -74,11 +74,11 @@ Milestones are sequential; within a milestone, fan out parallel builder subagent
 
 ## M5 — Learning infrastructure
 
-- [ ] Golden-query eval suite complete for both categories, passing, and wired to gate engine changes.
-- [ ] Query mining implemented: user-added questions and low-confidence/thumbs-down reports feed playbook updates and new eval cases.
-- [ ] Category cache with freshness windows in place.
-- [ ] Nightly digest job produces `intelligence/digests/YYYY-MM-DD.{json,md}` and `intelligence/latest.md` with all minimum contents from `docs/LEARNING.md`, containing only aggregates/anonymized exemplars.
-- [ ] `intelligence/actions/` pattern exercised at least once: a digest finding addressed and logged.
+- [x] Golden-query eval suite complete for both categories (6 CE / 6 HG), passing (S4 100%), and wired to gate engine changes (exit 1 below 95%; runs with noCache so the cache can't mask regressions).
+- [x] Query mining implemented: user-added questions → playbook add/demote candidates, low-confidence/thumbs-down reports → proposed golden eval cases (`npm run mine`); thumbs `report_feedback` feeds the down-signal.
+- [x] Category cache with freshness windows in place (per-category CE 24h / HG 72h; quick uncached; serves prior report with its real research date — honest).
+- [x] Nightly digest job (`npm run digest`) produces `intelligence/digests/YYYY-MM-DD.{json,md}` + `intelligence/latest.md` with all `docs/LEARNING.md` minimum contents; aggregates/anonymized only (PII-safe, verified).
+- [x] `intelligence/actions/` pattern exercised: eval-caught weak assumptions → classify v1.2.0 + robust grader → S4 100% (`intelligence/actions/2026-07-27.md`).
 
 ## M6 — Polish and hardening
 

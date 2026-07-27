@@ -26,7 +26,8 @@ import {
 import { PROMPTS, promptVersions } from "./prompts";
 import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
 import { domainFromChunk, usableChunks, type RawChunk } from "./sources";
-import { saveReport, saveServerEvent } from "../db";
+import { getReport, saveReport, saveServerEvent } from "../db";
+import { lookupFresh, remember } from "./cache";
 
 /**
  * Multi-step research workflow per docs/ENGINE.md:
@@ -63,6 +64,12 @@ export type ResearchInput = {
    * "user") so a "re-run with my changes" starts pre-adjusted. Seeded by text.
    */
   readonly seedAssumptions?: readonly SeedAssumption[];
+  /**
+   * Skip the category cache entirely (read AND write). The eval harness sets
+   * this so it always measures fresh engine output — a cached report must never
+   * mask an engine regression, or the eval gate (M5) would be meaningless.
+   */
+  readonly noCache?: boolean;
 };
 
 export class PipelineError extends Error {
@@ -295,6 +302,27 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   const location: Location | null = input.location ?? null;
   const locationLabel = location?.label;
   const locationKnown = location !== null && location.source !== "default";
+
+  // Category cache (M5 gate 3): an identical recent query in a cacheable mode
+  // reuses its prior report instead of spending Gemini again. HONEST — the
+  // report is returned UNCHANGED, carrying its real createdAt (which the UI
+  // shows); it is never relabelled as fetched "now". Freshness is per-category
+  // (short for price-sensitive electronics); quick mode is never cached. See
+  // engine/cache.ts. We emit the terminal "report" event so the live/session
+  // flow completes exactly as a fresh run would (session.ts treats it terminal).
+  const cacheHit = input.noCache ? null : lookupFresh(query, input.mode, Date.now());
+  if (cacheHit !== null) {
+    const cached = getReport(cacheHit.reportId);
+    if (cached !== null) {
+      ctx.reportId = cached.id;
+      console.error(
+        `[pipeline] category cache hit (mode=${input.mode}); reusing report ${cached.id} researched ${cached.createdAt} — skipping Gemini`,
+      );
+      emit({ type: "report", report: cached });
+      return cached;
+    }
+  }
+
   const reportId = nanoid(12);
   ctx.reportId = reportId;
   const ids = anonIds(input);
@@ -561,6 +589,16 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   } catch (err) {
     // The user still gets their report; persistence failure is logged loudly.
     console.error("[pipeline] saveReport failed", err);
+  }
+  // Remember this report so an identical future query reuses it while fresh
+  // (no-op for quick mode, or when the caller opted out of the cache). A cache
+  // write must never break the response.
+  if (!input.noCache) {
+    try {
+      remember(query, input.mode, report);
+    } catch (err) {
+      console.error("[pipeline] cache remember failed", err);
+    }
   }
   recordServerEvent(ids, {
     name: "report_completed",

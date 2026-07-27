@@ -1,0 +1,375 @@
+{
+  "date": "2026-07-27",
+  "window": {
+    "startIso": "2026-07-27T00:00:00.000Z",
+    "endIso": "2026-07-28T00:00:00.000Z"
+  },
+  "eventTotals": {
+    "total": 486,
+    "byName": {
+      "research_stage_completed": 313,
+      "report_completed": 60,
+      "search_started": 6,
+      "report_viewed": 58,
+      "source_clicked": 3,
+      "report_failed": 4,
+      "research_redirected": 3,
+      "assumption_edited": 2,
+      "question_edited": 2,
+      "research_abandoned": 7,
+      "deep_dive_started": 1,
+      "comparison_used": 10,
+      "pick_saved": 1,
+      "share_page_viewed": 6,
+      "poll_voted": 1,
+      "price_watch_set": 2,
+      "share_created": 1,
+      "poll_created": 1,
+      "cta_clicked": 2,
+      "report_feedback": 1,
+      "retailer_clicked": 1,
+      "poll_commented": 1
+    }
+  },
+  "topCategories": [
+    {
+      "category": "home-goods",
+      "reports": 33,
+      "share": 0.55
+    },
+    {
+      "category": "consumer-electronics",
+      "reports": 24,
+      "share": 0.4
+    },
+    {
+      "category": "other",
+      "reports": 3,
+      "share": 0.05
+    }
+  ],
+  "queryExemplars": [
+    {
+      "label": "home-goods · need",
+      "count": 17
+    },
+    {
+      "label": "consumer-electronics · named-product",
+      "count": 10
+    },
+    {
+      "label": "home-goods · named-product",
+      "count": 9
+    },
+    {
+      "label": "consumer-electronics · need",
+      "count": 8
+    },
+    {
+      "label": "home-goods · problem",
+      "count": 7
+    },
+    {
+      "label": "consumer-electronics · problem",
+      "count": 3
+    },
+    {
+      "label": "consumer-electronics · sku",
+      "count": 3
+    },
+    {
+      "label": "other · problem",
+      "count": 2
+    },
+    {
+      "label": "other · sku",
+      "count": 1
+    }
+  ],
+  "failureAndRetryByStage": [
+    {
+      "stage": "synthesize",
+      "attempts": 64,
+      "failures": 4,
+      "failureRate": 0.0625,
+      "retries": 5,
+      "retryRate": 0.0667
+    },
+    {
+      "stage": "classify",
+      "attempts": 64,
+      "failures": 0,
+      "failureRate": 0,
+      "retries": 0,
+      "retryRate": 0
+    },
+    {
+      "stage": "plan",
+      "attempts": 64,
+      "failures": 0,
+      "failureRate": 0,
+      "retries": 0,
+      "retryRate": 0
+    },
+    {
+      "stage": "evidence-1",
+      "attempts": 64,
+      "failures": 0,
+      "failureRate": 0,
+      "retries": 1,
+      "retryRate": 0.0156
+    },
+    {
+      "stage": "evidence-2",
+      "attempts": 31,
+      "failures": 0,
+      "failureRate": 0,
+      "retries": 1,
+      "retryRate": 0.0323
+    },
+    {
+      "stage": "evidence-3",
+      "attempts": 28,
+      "failures": 0,
+      "failureRate": 0,
+      "retries": 2,
+      "retryRate": 0.0714
+    },
+    {
+      "stage": "evidence-4",
+      "attempts": 1,
+      "failures": 0,
+      "failureRate": 0,
+      "retries": 0,
+      "retryRate": 0
+    },
+    {
+      "stage": "evidence-5",
+      "attempts": 1,
+      "failures": 0,
+      "failureRate": 0,
+      "retries": 0,
+      "retryRate": 0
+    }
+  ],
+  "lowestConfidencePatterns": {
+    "distribution": {
+      "medium": 18,
+      "high": 41,
+      "low": 1
+    },
+    "lowConfidenceByCategory": [
+      {
+        "category": "home-goods",
+        "count": 9
+      },
+      {
+        "category": "consumer-electronics",
+        "count": 8
+      },
+      {
+        "category": "other",
+        "count": 2
+      }
+    ],
+    "feedback": {
+      "up": 1,
+      "down": 0
+    }
+  },
+  "userEditedAssumptions": {
+    "total": 2,
+    "byAction": {
+      "dismissed": 2
+    }
+  },
+  "userEditedQuestions": {
+    "total": 2,
+    "byAction": {
+      "added": 2
+    },
+    "removedPlaybookQuestions": []
+  },
+  "flowAbandonment": [
+    {
+      "stage": "evidence-1",
+      "count": 3,
+      "avgElapsedMs": 22227
+    },
+    {
+      "stage": "evidence-3",
+      "count": 2,
+      "avgElapsedMs": 99906
+    },
+    {
+      "stage": "synthesize",
+      "count": 1,
+      "avgElapsedMs": 127199
+    },
+    {
+      "stage": "evidence-2",
+      "count": 1,
+      "avgElapsedMs": 32806
+    }
+  ],
+  "growth": {
+    "shareCreated": 1,
+    "sharePageViewed": 6,
+    "ctaClicked": 2,
+    "sharePageConversion": 0.3333,
+    "polls": {
+      "created": 1,
+      "voted": 1,
+      "commented": 1
+    },
+    "priceWatchSet": 2
+  },
+  "evalSuite": {
+    "present": true,
+    "file": "2026-07-27T20-01-15-369Z.json",
+    "ranAt": "2026-07-27T20:01:15.366Z",
+    "total": 12,
+    "passRate": 0.9166666666666666,
+    "target": 0.95,
+    "contractFailureRate": 0
+  },
+  "scorecard": {
+    "rows": [
+      {
+        "id": "S1",
+        "target": "Quick mode time-to-verdict p75 ≤ 45s; Full ≤ 4 min (real Gemini, both categories)",
+        "ownedBy": "M2",
+        "measured": "Full p75 152s ≤240s ☑; Quick unsteered 33–44s (3 golden), steered runs +1 batch push p75 ~77s — see D-024",
+        "status": "◐"
+      },
+      {
+        "id": "S2",
+        "target": "First visible research activity (assumptions or plan) ≤ 3s after search; \"best fit so far\" ≤ 30s",
+        "ownedBy": "M2",
+        "measured": "assumptions event 2.1s ✓; best-fit-so-far after batch 1 (~17–27s) ✓",
+        "status": "☑"
+      },
+      {
+        "id": "S3",
+        "target": "Report contract validation failure rate < 1% across the golden-query suite",
+        "ownedBy": "M1",
+        "measured": "0.0% across 16 golden-suite runs (2026-07-27, evals/results/)",
+        "status": "☑"
+      },
+      {
+        "id": "S4",
+        "target": "Golden-query eval pass rate ≥ 95%, evals wired to block regressing engine changes",
+        "ownedBy": "M5",
+        "measured": "not yet measured",
+        "status": "☐"
+      },
+      {
+        "id": "S5",
+        "target": "Every report: ≥ 8 sources, ≥ 3 source classes represented or confidence indicator says why not",
+        "ownedBy": "M1",
+        "measured": "12/12 golden reports satisfy (sanitizer-enforced cap + gap sentence; eval sourceDiversity check)",
+        "status": "☑"
+      },
+      {
+        "id": "S6",
+        "target": "Share page p75 load ≤ 2.5s at mobile viewport; OG card renders correctly in a link-preview check",
+        "ownedBy": "M4",
+        "measured": "Share p75 1.2ms server response (self-contained ~25KB HTML, no external resources); OG `/og/:id.png` valid 1200×630 PNG. Full mobile Lighthouse LCP confirmed in M6 (S8).",
+        "status": "☑"
+      },
+      {
+        "id": "S7",
+        "target": "Visitor→searcher CTA conversion instrumented end-to-end; baseline recorded from real test sessions",
+        "ownedBy": "M4",
+        "measured": "Funnel wired + observed firing: share_page_viewed → cta_clicked → search_started(entry=\"share-cta\"); events recorded in DB",
+        "status": "☑"
+      },
+      {
+        "id": "S8",
+        "target": "Lighthouse mobile ≥ 90 (performance and accessibility) on home, report, and share pages",
+        "ownedBy": "M6",
+        "measured": "not yet measured",
+        "status": "☐"
+      },
+      {
+        "id": "S9",
+        "target": "100% of shipped features emit their telemetry events (audited feature-by-feature); 0 PII findings in event samples",
+        "ownedBy": "M5",
+        "measured": "not yet measured",
+        "status": "☐"
+      },
+      {
+        "id": "S10",
+        "target": "Nightly digest runs green ≥ 3 consecutive days with all minimum contents present",
+        "ownedBy": "M5",
+        "measured": "not yet measured",
+        "status": "☐"
+      },
+      {
+        "id": "S11",
+        "target": "qa-red-team final sweep: 0 open trust violations (fabricated live data, client-reachable secrets, purchase pressure) and 0 open critical bugs",
+        "ownedBy": "M6",
+        "measured": "not yet measured",
+        "status": "☐"
+      },
+      {
+        "id": "S12",
+        "target": "Full-loop task success: 10/10 scripted end-to-end journeys (5 per category, mobile viewport) complete without dead ends",
+        "ownedBy": "M6",
+        "measured": "not yet measured",
+        "status": "☐"
+      }
+    ],
+    "metrics": {
+      "reportsCompleted": 60,
+      "reportFailureRate": 0.0625,
+      "reportTotalMsP75": 127904,
+      "avgSourceCount": 42.88,
+      "evalPassRate": 0.9166666666666666,
+      "evalContractFailureRate": 0,
+      "sharePageConversion": 0.3333
+    },
+    "deltas": {
+      "reportsCompleted": null,
+      "reportFailureRate": null,
+      "reportTotalMsP75": null,
+      "avgSourceCount": null,
+      "evalPassRate": null,
+      "evalContractFailureRate": null,
+      "sharePageConversion": null
+    },
+    "comparedTo": null
+  },
+  "suspectedProblems": [
+    {
+      "rank": 1,
+      "title": "Users abandon research at the \"evidence-1\" stage",
+      "signal": "research_abandoned",
+      "evidence": "3 abandonments at \"evidence-1\" (avg 22227ms elapsed before leaving)."
+    },
+    {
+      "rank": 2,
+      "title": "\"synthesize\" stage is failing",
+      "signal": "report_failed",
+      "evidence": "4 failure(s) at \"synthesize\" over 64 attempt(s) (failure rate 6.3%)."
+    },
+    {
+      "rank": 3,
+      "title": "Users abandon research at the \"evidence-3\" stage",
+      "signal": "research_abandoned",
+      "evidence": "2 abandonments at \"evidence-3\" (avg 99906ms elapsed before leaving)."
+    },
+    {
+      "rank": 4,
+      "title": "Users abandon research at the \"synthesize\" stage",
+      "signal": "research_abandoned",
+      "evidence": "1 abandonment at \"synthesize\" (avg 127199ms elapsed before leaving)."
+    },
+    {
+      "rank": 5,
+      "title": "Users abandon research at the \"evidence-2\" stage",
+      "signal": "research_abandoned",
+      "evidence": "1 abandonment at \"evidence-2\" (avg 32806ms elapsed before leaving)."
+    }
+  ]
+}

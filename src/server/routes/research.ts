@@ -424,7 +424,8 @@ export function registerResearchRoutes(app: Hono): void {
     }
 
     try {
-      const report = await runResearch(parsed.value);
+      // The eval harness sets noCache so it always measures fresh engine output.
+      const report = await runResearch({ ...parsed.value, noCache: record.noCache === true });
       return c.json({ ok: true as const, report }, 200);
     } catch (err) {
       const rerr = toResearchError(err);

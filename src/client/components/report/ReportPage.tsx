@@ -4,6 +4,7 @@ import type { Assumption, Report, ResearchMode } from "../../../shared/report";
 import { buildResearchPath } from "../../lib/api";
 import { track } from "../../lib/telemetry";
 import { ErrorState, PageTop, ReportMissing } from "../ui/States";
+import { FeedbackButtons } from "./FeedbackButtons";
 import { PriceWatchButton } from "./PriceWatchButton";
 import { Attribution, ShareButton } from "./ShareBar";
 import { SourcesSheet } from "./SourcesSheet";
@@ -200,6 +201,8 @@ function ReportSummary({ report }: { report: Report }) {
         <ShareButton reportId={report.id} surface="report" />
         <p className="micro-copy report__share-note">Good enough to send to a friend.</p>
       </div>
+
+      <FeedbackButtons reportId={report.id} />
 
       <Attribution />
 

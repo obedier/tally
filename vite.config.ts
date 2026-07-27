@@ -24,6 +24,6 @@ export default defineConfig({
     outDir: "dist/client",
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "evals/**/*.test.ts"],
   },
 });

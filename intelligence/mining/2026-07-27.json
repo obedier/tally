@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-07-27T20:09:38.003Z",
+  "window": {
+    "sinceMs": null,
+    "nowMs": 1785182978003
+  },
+  "totals": {
+    "eventsScanned": 486,
+    "reportsScanned": 59,
+    "userAddedQuestionEvents": 2
+  },
+  "playbookAddCandidates": [
+    {
+      "normalizedText": "does the enamel chip when using metal utensils",
+      "count": 1,
+      "examples": [
+        "Does the enamel chip when using metal utensils?"
+      ]
+    },
+    {
+      "normalizedText": "which pans warp",
+      "count": 1,
+      "examples": [
+        "which pans warp"
+      ]
+    },
+    {
+      "normalizedText": "will the weight of cast iron crack a glass cooktop over time",
+      "count": 1,
+      "examples": [
+        "Will the weight of cast iron crack a glass cooktop over time?"
+      ]
+    }
+  ],
+  "playbookDemoteCandidates": [],
+  "evalCaseCandidates": [
+    {
+      "id": "mined-lowconf-6mKn0ojJKz2C",
+      "source": "low-confidence",
+      "query": "x",
+      "mode": "full",
+      "expect": {
+        "category": "other",
+        "queryType": "problem",
+        "minSources": 8,
+        "minSourceClasses": 3,
+        "assumptionHints": []
+      }
+    }
+  ]
+}

@@ -47,7 +47,7 @@ const bullets = (items: readonly string[]): string =>
 
 export const PROMPTS = {
   classify: {
-    version: "1.1.0",
+    version: "1.2.0",
     build: ({ query }: ClassifyPromptArgs): string => `${PERSONA}
 
 Classify this product-research query and infer the user's situation.
@@ -58,13 +58,15 @@ Respond with ONLY a JSON object in exactly this shape:
 {
   "queryType": one of "named-product" (a specific model), "need" (a product category to shortlist), "problem" (a situation to solve where the product type may not be chosen yet), "sku" (a retailer catalog identifier such as an Amazon ASIN or a bare model number),
   "category": { "id": one of "consumer-electronics" | "home-goods" | "other", "label": short human-readable category label, "confidence": number between 0 and 1 },
-  "assumptions": array of 3 to 5 short statements about the user's likely situation (budget, use case, constraints, location) phrased so the user could read and edit each one, e.g. "You want to stay under about $400.",
+  "assumptions": array of 3 to 5 short DECISION-RELEVANT statements about the user's situation, phrased so the user could read and edit each one, e.g. "You want to stay under about $400.",
   "extraQuestions": array of 0 to 2 objects { "text": a research question specific to THIS query that a generic category playbook would miss, "whyItMatters": one sentence }
 }
 
 Rules:
 - Assumptions are editable statements about the user's situation, never questions.
-- Only infer what the query reasonably supports; do not invent personal details.
+- Each assumption MUST be decision-relevant — something that, if wrong, would change which product wins. Cover the dimensions that actually drive THIS purchase: the intended use case, the priority that matters most (e.g. portability, battery life, performance, noise, durability, capacity), budget / price sensitivity, and any key configuration or variant choice (size, memory, finish, model tier).
+- NEVER restate the query as an assumption (e.g. for "MacBook Air M4 13 inch" do NOT write "You are looking for a MacBook Air M4 13-inch"). NEVER use empty filler that applies to any query ("You are considering a purchase", "You want a good product", "You are in a region where it is available"). Those waste the user's attention and are forbidden.
+- Only infer what the query reasonably supports; do not invent specific personal details.
 - Extra questions must be answerable from public web research (reviews, specs, tests, prices). NEVER phrase a question addressed to the user ("What flooring do you have?") — anything that needs the user's input belongs in assumptions instead.
 - If the query looks like a SKU or catalog identifier you cannot resolve without search, use category "other" with low confidence; research will refine it.
 - If nothing query-specific is needed beyond a standard playbook, return an empty extraQuestions array.`,
