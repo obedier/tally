@@ -360,6 +360,8 @@ export function assembleReport(input: AssembleInput): Report {
   const report: Report = {
     id: input.reportId,
     query: input.query,
+    // Populated by the pipeline's honest estimate once M2 wiring lands.
+    hoursSaved: null,
     queryType: input.queryType,
     category,
     createdAt: input.createdAt,

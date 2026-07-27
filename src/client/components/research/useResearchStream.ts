@@ -104,6 +104,10 @@ export function useResearchStream(
               };
             case "error":
               return { ...base, phase: "failed", error: event.error };
+            default:
+              // New event types (time-saved, control-applied) are wired by the
+              // M2 live-research UI; until then they update nothing.
+              return base;
           }
         });
       },

@@ -25,6 +25,7 @@ function makeReport(id: string, createdAt: string, query = "best budget headphon
   return {
     id,
     query,
+    hoursSaved: null,
     queryType: "need",
     category: { id: "consumer-electronics", label: "Consumer electronics", confidence: 0.9 },
     createdAt,

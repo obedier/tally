@@ -78,6 +78,40 @@ const retailerClicked = z.object({
   kind: z.enum(["online", "local", "online-local"]),
 });
 
+/** M2 live-research events: user steering + abandonment are direct playbook signal. */
+const assumptionEdited = z.object({
+  name: z.literal("assumption_edited"),
+  researchId: z.string().min(1),
+  action: z.enum(["affirmed", "dismissed", "reworded", "added"]),
+});
+
+const questionEdited = z.object({
+  name: z.literal("question_edited"),
+  researchId: z.string().min(1),
+  action: z.enum(["added", "removed"]),
+  /** Playbook question id when a playbook question was removed; null for user-added. */
+  questionId: z.string().nullable(),
+});
+
+const researchRedirected = z.object({
+  name: z.literal("research_redirected"),
+  researchId: z.string().min(1),
+  stage: z.string().min(1),
+  controlsApplied: z.number().int().positive(),
+});
+
+const researchAbandoned = z.object({
+  name: z.literal("research_abandoned"),
+  researchId: z.string().min(1),
+  stage: z.string().min(1),
+  elapsedMs: z.number().nonnegative(),
+});
+
+const deepDiveStarted = z.object({
+  name: z.literal("deep_dive_started"),
+  fromReportId: z.string().min(1),
+});
+
 export const EventBodySchema = z.discriminatedUnion("name", [
   searchStarted,
   researchStageCompleted,
@@ -86,6 +120,11 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   reportViewed,
   sourceClicked,
   retailerClicked,
+  assumptionEdited,
+  questionEdited,
+  researchRedirected,
+  researchAbandoned,
+  deepDiveStarted,
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;
 

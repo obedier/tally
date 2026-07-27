@@ -157,9 +157,22 @@ export const ReportMetaSchema = z.object({
 });
 export type ReportMeta = z.infer<typeof ReportMetaSchema>;
 
+/**
+ * Honest research-effort estimate: derived from questions answered and sources
+ * consulted, always presented as an estimate — never a fabricated metric.
+ */
+export const HoursSavedSchema = z.object({
+  min: z.number().nonnegative(),
+  max: z.number().nonnegative(),
+  basis: z.string().min(1),
+});
+export type HoursSaved = z.infer<typeof HoursSavedSchema>;
+
 export const ReportSchema = z.object({
   id: z.string().min(1),
   query: z.string().min(1),
+  /** Nullable so pre-M2 stored reports keep validating. */
+  hoursSaved: HoursSavedSchema.nullable().default(null),
   queryType: QueryTypeSchema,
   category: z.object({
     id: CategoryIdSchema,
@@ -241,6 +254,16 @@ export const ResearchEventSchema = z.discriminatedUnion("type", [
     note: z.string().nullable(),
   }),
   z.object({
+    type: z.literal("time-saved"),
+    estimate: HoursSavedSchema,
+  }),
+  z.object({
+    /** Acknowledges an applied mid-run control change so the UI can confirm honestly. */
+    type: z.literal("control-applied"),
+    controlId: z.string().min(1),
+    detail: z.string().min(1),
+  }),
+  z.object({
     type: z.literal("report"),
     report: ReportSchema,
   }),
@@ -250,3 +273,40 @@ export const ResearchEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type ResearchEvent = z.infer<typeof ResearchEventSchema>;
+
+/**
+ * Mid-run control messages for a live research session. Applied between
+ * evidence batches: completed work is never discarded, removed questions are
+ * never spent on, added questions and edited assumptions steer remaining work.
+ */
+export const ResearchControlSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("remove-question"),
+    controlId: z.string().min(1),
+    questionId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("add-question"),
+    controlId: z.string().min(1),
+    text: z.string().min(3).max(300),
+  }),
+  z.object({
+    type: z.literal("set-assumption"),
+    controlId: z.string().min(1),
+    assumptionId: z.string().min(1),
+    affirmed: z.boolean(),
+    /** Optional replacement text when the user edits the wording. */
+    text: z.string().min(3).max(300).optional(),
+  }),
+  z.object({
+    type: z.literal("add-assumption"),
+    controlId: z.string().min(1),
+    text: z.string().min(3).max(300),
+  }),
+]);
+export type ResearchControl = z.infer<typeof ResearchControlSchema>;
+
+export const StartSessionResponseSchema = z.object({
+  ok: z.literal(true),
+  researchId: z.string().min(1),
+});
