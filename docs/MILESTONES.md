@@ -2,7 +2,7 @@
 
 This is the persistent state file and the single acceptance authority for V1. Update checkboxes only after the gate is verified in the running app (per the loop engineering rules in `CLAUDE.md`). Keep the **Status** line and the scorecard current so any fresh session can resume from this file alone.
 
-**Status:** M1 complete — core research loop live end-to-end (fresh app at repo root: Vite/React client + Hono server + SQLite, SSE research stream, 12/12 golden evals after fix wave, adversarial reviews addressed; see D-008..D-018). Next: M2 — live research experience.
+**Status:** M2 complete — live research experience shipped end-to-end: server-side steerable sessions with lossless SSE replay on reload, editable assumptions + plan mid-run, best-fit-so-far / source-count / time-saved as evidence arrives, Quick/Full/Deep modes, transparent failure/retry, live-research telemetry. Adversarial review (qa-red-team, design-critic) closed: 2 HIGHs fixed + regression-tested (D-026), design T1 fixed (D-016 competitor-seller filter). Next: M3 — results depth.
 
 ## V1 scorecard — measurable targets
 
@@ -46,12 +46,12 @@ Milestones are sequential; within a milestone, fan out parallel builder subagent
 
 ## M2 — Live research experience
 
-- [ ] Research opens with inferred, editable assumptions; edits redirect research live without restarting.
-- [ ] Full research plan visible: completed / in-progress / upcoming questions; user can remove and add questions before they run.
-- [ ] Progress, time saved, source count, and "best fit so far" update as evidence arrives; product imagery shown during research.
-- [ ] Quick, Full, and Deep Dive modes behave distinctly per `docs/ENGINE.md`; Deep Dive offered only after an initial report.
-- [ ] Failure states show transparent retry, never fabricated live claims.
-- [ ] Live-research telemetry (assumption edits, question edits, redirects, abandonment) flowing.
+- [x] Research opens with inferred, editable assumptions; edits redirect research live without restarting.
+- [x] Full research plan visible: completed / in-progress / upcoming questions; user can remove and add questions before they run.
+- [x] Progress, time saved, source count, and "best fit so far" update as evidence arrives; product imagery shown during research.
+- [x] Quick, Full, and Deep Dive modes behave distinctly per `docs/ENGINE.md`; Deep Dive offered only after an initial report.
+- [x] Failure states show transparent retry, never fabricated live claims.
+- [x] Live-research telemetry (assumption edits, question edits, redirects, abandonment) flowing.
 
 ## M3 — Results depth
 

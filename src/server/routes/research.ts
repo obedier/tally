@@ -44,18 +44,51 @@ const MAX_QUERY_LENGTH = 500;
 // golden-query eval suite (~110s per case on one session id).
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_MAX_STARTS = 12;
-const rateBuckets = new Map<string, number[]>();
+// Global backstop: total starts/window across ALL callers. The per-client key
+// is built from client-controlled fields (sessionId, x-forwarded-for), so a
+// caller rotating those could dodge the per-client cap; this tier cannot be
+// bypassed and bounds total research spend regardless. Sized well above the
+// eval suite + realistic concurrent real usage for the single-process V1.
+const RATE_MAX_GLOBAL_STARTS = 60;
+
+interface RateLimiterOptions {
+  readonly windowMs: number;
+  readonly maxPerKey: number;
+  readonly maxGlobal: number;
+}
+
+/**
+ * Two-tier sliding-window limiter. `now` is injected so the logic is pure and
+ * unit-testable. A rejected start consumes neither budget.
+ */
+export function createRateLimiter(opts: RateLimiterOptions) {
+  const buckets = new Map<string, number[]>();
+  let globalStarts: number[] = [];
+  return (key: string, now: number): boolean => {
+    // Global backstop first — cannot be bypassed by rotating the client-keyed
+    // fields, so it bounds total research spend regardless of per-key evasion.
+    globalStarts = globalStarts.filter((t) => now - t < opts.windowMs);
+    if (globalStarts.length >= opts.maxGlobal) return true;
+    const kept = (buckets.get(key) ?? []).filter((t) => now - t < opts.windowMs);
+    if (kept.length >= opts.maxPerKey) {
+      buckets.set(key, kept);
+      return true;
+    }
+    buckets.set(key, [...kept, now]);
+    globalStarts.push(now);
+    if (buckets.size > 10_000) buckets.clear();
+    return false;
+  };
+}
+
+const limiter = createRateLimiter({
+  windowMs: RATE_WINDOW_MS,
+  maxPerKey: RATE_MAX_STARTS,
+  maxGlobal: RATE_MAX_GLOBAL_STARTS,
+});
 
 function rateLimited(key: string): boolean {
-  const now = Date.now();
-  const kept = (rateBuckets.get(key) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (kept.length >= RATE_MAX_STARTS) {
-    rateBuckets.set(key, kept);
-    return true;
-  }
-  rateBuckets.set(key, [...kept, now]);
-  if (rateBuckets.size > 10_000) rateBuckets.clear();
-  return false;
+  return limiter(key, Date.now());
 }
 
 const RATE_LIMIT_ERROR: ResearchError = {

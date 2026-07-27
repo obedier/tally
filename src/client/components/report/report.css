@@ -187,6 +187,22 @@
   font-size: var(--text-small);
 }
 
+/* A dismissed assumption is shown de-emphasized so the report never implies
+   Tally used something the user explicitly rejected. */
+.report__chip--dismissed {
+  border-style: dashed;
+  background: transparent;
+  color: var(--color-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-line);
+}
+
+.report__chip-note {
+  display: block;
+  margin-top: 2px;
+  text-decoration: none;
+}
+
 /* Skeletons */
 .report__skeletons {
   display: grid;

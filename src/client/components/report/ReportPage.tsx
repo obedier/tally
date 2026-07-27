@@ -179,7 +179,15 @@ function ReportSummary({ report }: { report: Report }) {
           <h2 className="kicker">What we assumed</h2>
           <ul className="report__chips">
             {report.assumptions.map((assumption) => (
-              <li key={assumption.id}>{assumption.text}</li>
+              <li
+                key={assumption.id}
+                className={assumption.affirmed ? undefined : "report__chip--dismissed"}
+              >
+                {assumption.text}
+                {assumption.affirmed ? null : (
+                  <span className="micro-copy report__chip-note"> — you dismissed this; it didn't steer the research</span>
+                )}
+              </li>
             ))}
           </ul>
         </section>
