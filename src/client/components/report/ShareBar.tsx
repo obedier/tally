@@ -48,3 +48,16 @@ export function Attribution() {
     </p>
   );
 }
+
+/**
+ * Compact corner wordmark for individual blocks (verdict, pros/cons) so a
+ * single-block screenshot crop is still self-attributed — the share loop the
+ * spec calls out. Decorative; the page-level Attribution remains the primary.
+ */
+export function BlockMark() {
+  return (
+    <span className="report__block-mark" aria-hidden="true">
+      Tally
+    </span>
+  );
+}

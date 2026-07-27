@@ -213,6 +213,11 @@ h2.section{font-family:var(--serif);font-weight:700;font-size:1.35rem;letter-spa
 .proscons ul{margin:0;padding-left:1.1rem;font-size:.875rem}
 .proscons .cons li{color:var(--orange)}
 ol.alts{list-style:none;margin:0;padding:0}
+.more-alts{margin-top:.75rem}
+.more-alts summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green)}
+.alt-compact{list-style:none;margin:.5rem 0 0;padding:0}
+.alt-compact li{display:flex;justify-content:space-between;gap:1rem;padding:.4rem 0;border-bottom:1px solid var(--line);font-size:.9rem}
+.alt-compact .price{color:var(--green);font-weight:600;white-space:nowrap}
 .alt-head{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
 .tag{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
   color:var(--orange);background:#fbeee7;padding:.15rem .5rem;border-radius:999px;white-space:nowrap}
@@ -246,10 +251,23 @@ export function buildShareHtml(report: Report, origin: string): string {
   const researchDate = formatDate(report.createdAt);
   const confidenceKey = report.verdict.confidence;
 
-  const altsHtml = report.alternatives.length
-    ? `<h2 class="section">Also considered</h2><ol class="alts">${report.alternatives
-        .map(renderAlternative)
-        .join("")}</ol>`
+  // Foreground the single best alternative (as the report page does) rather than
+  // a flat list of near-duplicates — the lovability principle on the stranger-
+  // facing artifact. Remaining options collapse into a compact "more" list.
+  const primaryAlt = report.alternatives.find((a) => a.isKeyAlternative) ?? report.alternatives[0];
+  const otherAlts = report.alternatives.filter((a) => a !== primaryAlt);
+  const compactAlt = (a: Alternative): string =>
+    `<li><span>${esc(a.name)}</span><span class="price">${
+      a.priceRange ? esc(a.priceRange.display) : "Check retailer"
+    }</span></li>`;
+  const altsHtml = primaryAlt
+    ? `<h2 class="section">A different priority?</h2>${renderAlternative(primaryAlt)}${
+        otherAlts.length
+          ? `<details class="more-alts"><summary>${otherAlts.length} more option${
+              otherAlts.length === 1 ? "" : "s"
+            } considered</summary><ul class="alt-compact">${otherAlts.map(compactAlt).join("")}</ul></details>`
+          : ""
+      }`
     : "";
 
   const sourcesHtml = report.sources.length

@@ -30,6 +30,9 @@
 
 .home__search:focus-within {
   border-color: var(--color-green);
+  /* A visible ring, not color alone — consistent with every other control. */
+  outline: 2px solid var(--color-green);
+  outline-offset: 2px;
 }
 
 .home__search-glass {

@@ -498,3 +498,16 @@
   color: var(--color-green);
   letter-spacing: 0.01em;
 }
+
+/* Per-block wordmark so a single-block screenshot crop stays self-attributed. */
+.report__block-mark {
+  display: block;
+  text-align: right;
+  margin-top: var(--space-2);
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: var(--text-micro);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-green);
+  opacity: 0.55;
+}

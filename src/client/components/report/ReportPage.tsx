@@ -6,7 +6,7 @@ import { track } from "../../lib/telemetry";
 import { ErrorState, PageTop, ReportMissing } from "../ui/States";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { PriceWatchButton } from "./PriceWatchButton";
-import { Attribution, ShareButton } from "./ShareBar";
+import { Attribution, BlockMark, ShareButton } from "./ShareBar";
 import { SourcesSheet } from "./SourcesSheet";
 import { useReport, useReportViewed, useSavedPick, type SavedPickControls } from "./useReport";
 import "./report.css";
@@ -80,6 +80,7 @@ function ReportSummary({ report }: { report: Report }) {
         <p className="micro-copy report__query">{report.query}</p>
         <h1 className="display display--headline">{verdict.headline}</h1>
         <p className="body-copy report__rationale">{verdict.rationale}</p>
+        <BlockMark />
       </header>
 
       <section className="report__decisive" aria-label="Decisive factors">
@@ -128,6 +129,7 @@ function ReportSummary({ report }: { report: Report }) {
             </ul>
           </div>
         </div>
+        <BlockMark />
       </section>
 
       {keyAlternative ? (

@@ -87,7 +87,7 @@ export function RecentResearch() {
 
       {state.status === "ready" && state.items.length > 0 ? (
         <ul className="recent__list">
-          {state.items.map((item) => (
+          {state.items.slice(0, 10).map((item) => (
             <li key={item.id} className="recent__row">
               <Link className="recent__open" to={`/report/${item.id}`}>
                 <span className="recent__open-copy">
