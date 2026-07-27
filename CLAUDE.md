@@ -35,12 +35,13 @@ When goals conflict, resolve in this priority order: **trust > usefulness > spee
 
 ## Prototype policy
 
-The existing prototype is direction, not a ceiling, and never an excuse. Two reference sources exist in the repo:
+The existing prototype is direction, not a ceiling, and never an excuse. One reference source exists in the repo:
 
-- **`tally-mobile-prototype/`** — the prototype. Primary direction for visual identity, flows, and copy.
-- **`old_src/`** — early code. Reference material only: mine it for reusable domain models, prompts, or logic, but assume it is stale until proven otherwise. Never import from it wholesale; evaluate piece by piece.
+- **`tally-mobile-prototype/`** — the prototype. Primary direction for visual identity, flows, and copy. It is hash-locked and self-protected (its own `AGENTS.md`); V1 is built outside it (see `docs/DECISIONS.md` D-003) and the prototype stays runnable as reference.
 
-- **Harvest first.** Before changing anything, run the prototype and inventory what it gets right: visual identity, flows, domain models, copy, working routes. Sweep `old_src/` for salvageable pieces in the same pass. Record the inventory in `docs/DECISIONS.md`.
+(An `old_src/` directory existed at handoff but was verified byte-identical to the prototype and removed in M0 — see D-001. It survives in git history at the baseline commit.)
+
+- **Harvest first.** Before changing anything, run the prototype and inventory what it gets right: visual identity, flows, domain models, copy, working routes. Record the inventory in `docs/DECISIONS.md`. *(Done in M0 — see the harvest inventory there.)*
 - **Evaluate per module.** Keep a module only if it is sound (typed, coherent, aligned with `docs/`); refactor it if it's close; rewrite it without hesitation if it constrains quality. Prefer rewriting over contorting good architecture to fit prototype shortcuts.
 - **The spec wins.** Where the prototype and `docs/` disagree, `docs/` wins. Where the prototype is silent, the quality bar in `docs/PRODUCT.md` wins — never ship something merely because the prototype did.
 - **Preserve deliberately, not by default.** Protected runtime files and existing repo guidance (`AGENTS.md` etc.) are respected, but "it already worked that way" is not an argument.
@@ -75,15 +76,16 @@ You are not one engineer; you are the tech lead of an agent team. Run this proje
 
 ## Commands
 
-Fill this section in during the M0 audit (exact dev/build/typecheck/test/eval commands from the repo), commit it, and keep it current. Until then, discover commands from `package.json` and repo scripts.
+Filled during M0. These are the **prototype reference** commands (run from `tally-mobile-prototype/`); update to the V1 app's commands when M1 scaffolding lands. Note: `predev`/`prebuild` run a hash-integrity gate over 28 protected files and hard-fail if any were edited.
 
 ```
-dev:        (fill in)
-build:      (fill in)
-typecheck:  (fill in)
-test:       (fill in)
-browser:    (fill in)
-evals:      (fill in)
+dev:        cd tally-mobile-prototype && npm run dev -- --port 5199 --strictPort
+            # 5173 is often squatted by another local project (ScanNet); always pass an explicit port
+build:      cd tally-mobile-prototype && npm run build        # tsc (src/ only) + vite build + sites packaging
+typecheck:  cd tally-mobile-prototype && npx tsc --noEmit     # no package alias exists
+test:       cd tally-mobile-prototype && npm run test:sites   # worker tests; test 4 requires a prior build
+browser:    cd tally-mobile-prototype && npm run test:runtime # Playwright; 1 known-red keyboard test at handoff
+evals:      (does not exist yet — created in M1/M5)
 ```
 
 ## Loop engineering

@@ -2,7 +2,7 @@
 
 This is the persistent state file and the single acceptance authority for V1. Update checkboxes only after the gate is verified in the running app (per the loop engineering rules in `CLAUDE.md`). Keep the **Status** line and the scorecard current so any fresh session can resume from this file alone.
 
-**Status:** not started — begin with M0.
+**Status:** M0 complete (audit, harvest inventory in `docs/DECISIONS.md`, commands filled, baseline commit made). Next: M1 — core research loop, built fresh outside the prototype per D-003.
 
 ## V1 scorecard — measurable targets
 
@@ -27,12 +27,12 @@ Milestones are sequential; within a milestone, fan out parallel builder subagent
 
 ## M0 — Audit and harvest
 
-- [ ] Repository inspected via parallel `repo-cartographer` agents: `tally-mobile-prototype/`, `old_src/`, and the main app's infrastructure (package scripts, worker/backend, routes, existing tests, `AGENTS.md`/repo guidance).
-- [ ] `.env.local` checked for `GEMINI_API_KEY` (never printed, committed, or exposed).
-- [ ] Prototype (`tally-mobile-prototype/`) run and its current search flow manually tested by the lead before any changes.
-- [ ] Harvest inventory written to `docs/DECISIONS.md`: what the prototype gets right; per-module keep/refactor/rewrite verdicts with one-line reasons; salvage list from `old_src/` with explicit warnings on anything unsafe to copy.
-- [ ] `CLAUDE.md` **Commands** section filled in with the repo's real commands and committed.
-- [ ] Baseline commit made.
+- [x] Repository inspected via parallel `repo-cartographer` agents: `tally-mobile-prototype/`, `old_src/`, and the main app's infrastructure (package scripts, worker/backend, routes, existing tests, `AGENTS.md`/repo guidance).
+- [x] `.env.local` checked for `GEMINI_API_KEY` (never printed, committed, or exposed).
+- [x] Prototype (`tally-mobile-prototype/`) run and its current search flow manually tested by the lead before any changes.
+- [x] Harvest inventory written to `docs/DECISIONS.md`: what the prototype gets right; per-module keep/refactor/rewrite verdicts with one-line reasons; salvage list from `old_src/` with explicit warnings on anything unsafe to copy.
+- [x] `CLAUDE.md` **Commands** section filled in with the repo's real commands and committed.
+- [x] Baseline commit made.
 
 ## M1 — Core research loop
 
