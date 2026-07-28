@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { EventBody, TelemetryEvent } from "../../shared/telemetry";
 import { getDeviceId, getSessionId } from "./session";
+import { apiUrl, isRemoteOrigin } from "./origin";
 
 /**
  * Client telemetry queue. Batches events to POST /api/events, flushing every
@@ -8,7 +9,7 @@ import { getDeviceId, getSessionId } from "./session";
  * Envelope per src/shared/telemetry.ts; ids are anonymous only.
  */
 
-const ENDPOINT = "/api/events";
+const ENDPOINT = apiUrl("/api/events");
 const FLUSH_INTERVAL_MS = 5_000;
 const FLUSH_AT_COUNT = 10;
 /** TelemetryBatchSchema caps a batch at 50 events. */
@@ -76,9 +77,25 @@ function requeue(batch: TelemetryEvent[]): void {
   queue = [...batch, ...queue].slice(-MAX_QUEUE);
 }
 
+/**
+ * Last-gasp flush. sendBeacon can only send a JSON body same-origin — a
+ * cross-origin beacon needs a preflight it is not allowed to make, and fails
+ * silently. The native shell is always cross-origin, so it uses keepalive
+ * fetch, which does preflight and survives the page being torn down.
+ */
 function flushWithBeacon(): void {
   if (queue.length === 0) return;
   const batch = queue.slice(0, MAX_BATCH);
+  if (isRemoteOrigin) {
+    queue = queue.slice(batch.length);
+    void fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ events: batch }),
+      keepalive: true,
+    }).catch(() => requeue(batch));
+    return;
+  }
   const payload = new Blob([JSON.stringify({ events: batch })], {
     type: "application/json",
   });

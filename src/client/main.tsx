@@ -12,8 +12,11 @@ import "./styles/typography.css";
 import "./components/ui/ui.css";
 import { App } from "./App";
 import { initTelemetry } from "./lib/telemetry";
+import { initStatusBar } from "./lib/native";
 
 initTelemetry();
+// No-ops in a browser; styles the iOS status bar for the light paper ground.
+void initStatusBar();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

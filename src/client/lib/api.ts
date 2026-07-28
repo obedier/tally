@@ -12,6 +12,7 @@ import {
   type ResearchMode,
   type SeedAssumption,
 } from "../../shared/report";
+import { apiUrl } from "./origin";
 
 /**
  * Typed API access. Every response is zod-parsed against the shared report
@@ -81,7 +82,7 @@ async function readJsonQuietly(response: Response): Promise<unknown> {
 
 /** GET /api/reports — saved research, newest first (server order preserved). */
 export async function fetchReports(): Promise<ReportListItem[]> {
-  const response = await fetch("/api/reports");
+  const response = await fetch(apiUrl("/api/reports"));
   if (!response.ok) {
     throw new ApiError("Saved research could not be loaded.", response.status);
   }
@@ -95,7 +96,7 @@ export async function fetchReports(): Promise<ReportListItem[]> {
 
 /** GET /api/reports/:id — a full validated report. */
 export async function fetchReport(id: string): Promise<Report> {
-  const response = await fetch(`/api/reports/${encodeURIComponent(id)}`);
+  const response = await fetch(apiUrl(`/api/reports/${encodeURIComponent(id)}`));
   if (response.status === 404) throw new ReportNotFoundError();
   if (!response.ok) {
     throw new ApiError("This report could not be loaded.", response.status);
@@ -113,7 +114,7 @@ export async function fetchReport(id: string): Promise<Report> {
 
 /** DELETE /api/reports/:id */
 export async function deleteReport(id: string): Promise<void> {
-  const response = await fetch(`/api/reports/${encodeURIComponent(id)}`, {
+  const response = await fetch(apiUrl(`/api/reports/${encodeURIComponent(id)}`), {
     method: "DELETE",
   });
   if (!response.ok && response.status !== 404) {
@@ -163,7 +164,7 @@ export function buildResearchPath({ query, mode, location }: ResearchNavParams):
 export async function startResearchSession(request: StartSessionRequest): Promise<string> {
   let response: Response;
   try {
-    response = await fetch("/api/research/session", {
+    response = await fetch(apiUrl("/api/research/session"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(request),
@@ -194,7 +195,7 @@ export async function startResearchSession(request: StartSessionRequest): Promis
 }
 
 function sessionEventsUrl(researchId: string): string {
-  return `/api/research/session/${encodeURIComponent(researchId)}/events`;
+  return apiUrl(`/api/research/session/${encodeURIComponent(researchId)}/events`);
 }
 
 export type SessionProbe = "ok" | "missing" | "unreachable";
@@ -300,7 +301,7 @@ export async function postResearchControl(
 ): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(`/api/research/session/${encodeURIComponent(researchId)}/control`, {
+    response = await fetch(apiUrl(`/api/research/session/${encodeURIComponent(researchId)}/control`), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(control),

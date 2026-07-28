@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { track } from "../../lib/telemetry";
+import { shareLink } from "../../lib/share";
+import { shareUrl } from "../../lib/origin";
 
 type ShareSurface = "report" | "compare" | "prices";
 
@@ -21,13 +23,10 @@ export function ShareButton({
   const [copied, setCopied] = useState(false);
 
   const share = async (): Promise<void> => {
-    const url = `${window.location.origin}/s/${reportId}`;
+    const url = shareUrl(reportId);
     track({ name: "share_created", reportId, surface });
     try {
-      if (typeof navigator.share === "function") {
-        await navigator.share({ title: "Tally research", url });
-        return;
-      }
+      if (await shareLink(url)) return;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);

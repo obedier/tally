@@ -5,6 +5,7 @@ import {
   type PriceWatch,
 } from "../../shared/priceWatch";
 import { ApiError } from "./api";
+import { apiUrl } from "./origin";
 
 /**
  * Price-watch client helper (M4 growth). Records a saved re-check honestly —
@@ -21,7 +22,7 @@ const SetPriceWatchResponseSchema = z.object({
 export async function setPriceWatch(req: CreatePriceWatchRequest): Promise<PriceWatch> {
   let response: Response;
   try {
-    response = await fetch("/api/price-watch", {
+    response = await fetch(apiUrl("/api/price-watch"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(req),

@@ -4,6 +4,7 @@ import {
   type CreatePollRequest,
   type Poll,
 } from "../../shared/poll";
+import { apiUrl } from "./origin";
 
 /**
  * Typed client access to the decision-poll API. Every response is zod-parsed
@@ -79,7 +80,7 @@ async function postJson(url: string, body: unknown): Promise<Response> {
 
 /** POST /api/polls — create a poll from a report shortlist; returns the new poll. */
 export async function createPoll(request: CreatePollRequest): Promise<Poll> {
-  const response = await postJson("/api/polls", request);
+  const response = await postJson(apiUrl("/api/polls"), request);
   if (!response.ok) await throwForResponse(response);
   return parsePoll(await readJsonQuietly(response), response.status);
 }
@@ -88,7 +89,7 @@ export async function createPoll(request: CreatePollRequest): Promise<Poll> {
 export async function fetchPoll(id: string): Promise<Poll> {
   let response: Response;
   try {
-    response = await fetch(`/api/polls/${encodeURIComponent(id)}`);
+    response = await fetch(apiUrl(`/api/polls/${encodeURIComponent(id)}`));
   } catch {
     throw new PollApiError("Tally couldn't reach the server. Check your connection.", 0, "network");
   }
@@ -98,7 +99,7 @@ export async function fetchPoll(id: string): Promise<Poll> {
 
 /** POST /api/polls/:id/vote — cast (or move) this device's vote; returns updated poll. */
 export async function votePoll(id: string, optionId: string, deviceId: string): Promise<Poll> {
-  const response = await postJson(`/api/polls/${encodeURIComponent(id)}/vote`, {
+  const response = await postJson(apiUrl(`/api/polls/${encodeURIComponent(id)}/vote`), {
     optionId,
     deviceId,
   });
@@ -108,7 +109,7 @@ export async function votePoll(id: string, optionId: string, deviceId: string): 
 
 /** POST /api/polls/:id/comment — leave an account-free comment; returns updated poll. */
 export async function commentPoll(id: string, text: string, deviceId: string): Promise<Poll> {
-  const response = await postJson(`/api/polls/${encodeURIComponent(id)}/comment`, {
+  const response = await postJson(apiUrl(`/api/polls/${encodeURIComponent(id)}/comment`), {
     text,
     deviceId,
   });

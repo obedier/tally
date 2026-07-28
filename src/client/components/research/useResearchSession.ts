@@ -20,6 +20,7 @@ import {
 } from "../../lib/api";
 import { getDeviceId, getSessionId } from "../../lib/session";
 import { track } from "../../lib/telemetry";
+import { apiUrl } from "../../lib/origin";
 
 export interface StageInfo {
   stage: string;
@@ -132,7 +133,7 @@ export interface UseResearchSession {
 const MAX_STREAM_ERRORS = 4;
 const CONFIRMATION_MS = 4500;
 const START_CACHE_MAX = 24;
-const TELEMETRY_ENDPOINT = "/api/events";
+const TELEMETRY_ENDPOINT = apiUrl("/api/events");
 
 /**
  * StrictMode (and back/forward remounts) must never double-POST a session —

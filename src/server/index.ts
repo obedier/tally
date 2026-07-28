@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
+import { corsMiddleware } from "./cors";
 import { registerResearchRoutes } from "./routes/research";
 import { registerReportRoutes } from "./routes/reports";
 import { registerTelemetryRoutes } from "./routes/telemetry";
@@ -9,6 +10,11 @@ import { registerPollRoutes } from "./routes/polls";
 import { registerPriceWatchRoutes } from "./routes/priceWatch";
 
 const app = new Hono();
+
+// The native shells call this deployment from a local webview origin. Exact
+// allowlist, no credentials — see cors.ts. Registered before any /api route so
+// preflights are answered without touching handlers.
+app.use("/api/*", corsMiddleware());
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 

@@ -13,9 +13,18 @@
     "test:watch": "vitest",
     "evals": "tsx evals/run.ts",
     "mine": "tsx scripts/run-mining.ts",
-    "digest": "tsx scripts/run-digest.ts"
+    "digest": "tsx scripts/run-digest.ts",
+    "build:native": "tsc --noEmit && VITE_PUBLIC_ORIGIN=https://tally.o11r.com vite build --outDir dist/native",
+    "ios:sync": "npm run build:native && cap sync ios",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/ios": "^8.4.2",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.3",
     "@fontsource/dm-sans": "^5.2.5",
     "@fontsource/playfair-display": "^5.2.5",
     "@hono/node-server": "^1.14.0",
@@ -29,6 +38,7 @@
     "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.2",
