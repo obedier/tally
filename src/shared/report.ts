@@ -72,6 +72,12 @@ export const ProductPickSchema = z.object({
   whyBest: z.string().min(1),
   /** Source ids backing the key claims about this pick. */
   sourceIds: z.array(z.string()).default([]),
+  /**
+   * Product image URL harvested from a page this research actually cited
+   * (og:image) — real provenance only, never stock or generated imagery.
+   * Null when no cited page offered one.
+   */
+  imageUrl: z.string().url().nullable().default(null),
 });
 export type ProductPick = z.infer<typeof ProductPickSchema>;
 
@@ -93,6 +99,8 @@ export const AlternativeSchema = z.object({
   reviewSummary: z.string().min(1).nullable().default(null),
   /** Marks the single "excellent alternative for different priorities" per docs/PRODUCT.md. */
   isKeyAlternative: z.boolean().default(false),
+  /** Image from a cited page (og:image); null when none. See ProductPick.imageUrl. */
+  imageUrl: z.string().url().nullable().default(null),
 });
 export type Alternative = z.infer<typeof AlternativeSchema>;
 

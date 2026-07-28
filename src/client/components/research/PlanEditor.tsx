@@ -160,7 +160,7 @@ export function PlanEditor({
             placeholder="e.g. How loud is it on hard floors?"
             onSubmit={addQuestion}
           />
-          <p className="micro-copy">Added questions join the plan before the remaining research runs.</p>
+          <p className="micro-copy">New questions run with the remaining research.</p>
         </div>
       ) : null}
     </section>

@@ -80,6 +80,12 @@ function renderProsCons(pros: string[], cons: string[]): string {
     </div>`;
 }
 
+/** Product image from a cited page; removes itself if the host blocks hotlinking. */
+function productImg(url: string | null, cls: string): string {
+  if (url === null) return "";
+  return `<img class="${cls}" src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />`;
+}
+
 function renderBestFit(pick: ProductPick): string {
   const rating =
     pick.rating && pick.rating.value !== null
@@ -87,6 +93,7 @@ function renderBestFit(pick: ProductPick): string {
       : "";
   return `
     <section class="card bestfit" aria-labelledby="bestfit-heading">
+      ${productImg(pick.imageUrl, "product-img")}
       <p class="kicker">Best fit</p>
       <h3 id="bestfit-heading">${esc(pick.name)}</h3>
       <p class="price">${esc(pick.priceRange.display)} ${rating}</p>
@@ -102,6 +109,7 @@ function renderAlternative(alt: Alternative): string {
     : "";
   return `
     <li class="card alt">
+      ${productImg(alt.imageUrl, "product-img product-img--sm")}
       <div class="alt-head">
         <h4>${esc(alt.name)}</h4>
         ${keyTag}
@@ -161,6 +169,16 @@ function telemetryScript(reportId: string): string {
     send("share_page_viewed",{reportId:REPORT,firstTouch:firstTouch});
     var ctas=document.querySelectorAll("[data-cta]");
     for(var i=0;i<ctas.length;i++){(function(el){el.addEventListener("click",function(){send("cta_clicked",{reportId:REPORT,cta:el.getAttribute("data-cta")})})})(ctas[i])}
+    var shareBtn=document.querySelector("[data-share]");
+    if(shareBtn){shareBtn.addEventListener("click",function(){
+      var url=location.href.split("#")[0];
+      send("share_created",{reportId:REPORT,surface:"share-page"});
+      if(navigator.share){navigator.share({title:document.title,url:url}).catch(function(){})}
+      else if(navigator.clipboard){navigator.clipboard.writeText(url).then(function(){
+        var old=shareBtn.textContent;shareBtn.textContent="Link copied";
+        setTimeout(function(){shareBtn.textContent=old},1800);
+      }).catch(function(){})}
+    })}
   } catch(e) {}
 })();</script>`;
 }
@@ -235,6 +253,20 @@ ul.sources .domain{display:block;font-size:.75rem;color:var(--muted);margin-top:
 .cta-sub{text-align:center;font-size:.8125rem;color:var(--muted);margin:.4rem 0 0}
 footer.attribution{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--line);
   display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:.8125rem}
+.share-btn{font-family:var(--ui);font-size:.8125rem;font-weight:600;color:var(--green);
+  background:var(--green-wash);border:1px solid var(--line);border-radius:999px;
+  padding:.35rem .9rem;cursor:pointer}
+.share-btn:hover{background:var(--green);color:var(--on-green)}
+.product-img{float:right;width:96px;height:96px;object-fit:contain;margin:0 0 .5rem .75rem;
+  border-radius:8px;background:#fff;border:1px solid var(--line)}
+.product-img--sm{width:64px;height:64px}
+.confidence-wrap{margin:.25rem 0 0}
+.confidence-wrap summary{list-style:none;cursor:pointer;display:inline-block}
+.confidence-wrap summary::-webkit-details-marker{display:none}
+.confidence-reason{font-size:.875rem;line-height:1.5;color:var(--ink);margin:.5rem 0 0}
+.sources-wrap{margin:2.25rem 0 0}
+.section-summary{font-family:var(--serif);font-weight:700;font-size:1.35rem;letter-spacing:-.02em;
+  color:var(--green-deep);cursor:pointer}
 `;
 
 /**
@@ -270,10 +302,11 @@ export function buildShareHtml(report: Report, origin: string): string {
       }`
     : "";
 
+  // Sources collapse behind their count — cited, checkable, not a word wall.
   const sourcesHtml = report.sources.length
-    ? `<h2 class="section">Sources</h2><ul class="sources">${report.sources
+    ? `<details class="sources-wrap"><summary class="section-summary">${report.sources.length} sources</summary><ul class="sources">${report.sources
         .map(renderSource)
-        .join("")}</ul>`
+        .join("")}</ul></details>`
     : "";
 
   const factorsHtml = report.verdict.decisiveFactors.length
@@ -306,17 +339,19 @@ export function buildShareHtml(report: Report, origin: string): string {
 <div class="shell">
   <header class="brand">
     ${wordmark()}
-    <span class="tagline">Deep product research.</span>
+    <button type="button" class="share-btn" data-share aria-label="Share this research">Share</button>
   </header>
 
   <section class="verdict" aria-labelledby="verdict-heading">
     <p class="kicker">${esc(report.query)}</p>
     <h1 id="verdict-heading">${esc(title)}</h1>
     <p class="rationale">${esc(report.verdict.rationale)}</p>
-    <span class="confidence ${confidenceKey === "low" ? "low" : ""}">${esc(
-      CONFIDENCE_LABEL[confidenceKey] ?? confidenceKey,
-    )}</span>
-    <p class="confidence-reason">${esc(report.verdict.confidenceReason)}</p>
+    <details class="confidence-wrap">
+      <summary><span class="confidence ${confidenceKey === "low" ? "low" : ""}">${esc(
+        CONFIDENCE_LABEL[confidenceKey] ?? confidenceKey,
+      )} · why?</span></summary>
+      <p class="confidence-reason">${esc(report.verdict.confidenceReason)}</p>
+    </details>
     ${factorsHtml}
   </section>
 

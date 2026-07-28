@@ -189,3 +189,16 @@
   padding: var(--space-2) var(--space-3);
   color: var(--color-muted);
 }
+
+/* --- Product image on compare cards (cited pages only) --- */
+
+.compare-card__img {
+  float: right;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  margin: 0 0 var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  border: 1px solid var(--color-line);
+}

@@ -59,13 +59,11 @@ function Prices({ report }: { report: Report }) {
       {report.bestFit.priceRange.min !== null || report.bestFit.priceRange.max !== null ? (
         <p className="small-copy compare__intro">
           Current range: <strong className="prices__range">{report.bestFit.priceRange.display}</strong> —
-          the retailer listings below are what make up that range.
-          Prices move — confirm the listing before you buy or visit.
+          built from the listings below. Prices move; confirm before you buy.
         </p>
       ) : (
         <p className="small-copy compare__intro">
-          We couldn't confirm a live price range for this pick — check a retailer below.
-          Prices move — confirm the listing before you buy or visit.
+          No confirmed live range for this pick — check a retailer below.
         </p>
       )}
 
@@ -73,8 +71,7 @@ function Prices({ report }: { report: Report }) {
 
       {report.retailers.length === 0 ? (
         <p className="small-copy prices__empty">
-          No retailer listings were verified for this report, so none are shown.
-          Rerun the research to check again.
+          No verified retailer listings for this report. Rerun to check again.
         </p>
       ) : (
         <>
@@ -144,7 +141,7 @@ function LocationControl({
             </button>
           </div>
           <p className="micro-copy prices__location-hint">
-            Updating re-runs the research for this location — nothing here is changed until it finishes.
+            Updating re-runs the research for the new location.
           </p>
         </form>
       ) : (

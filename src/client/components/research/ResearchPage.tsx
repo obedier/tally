@@ -139,8 +139,8 @@ export function ResearchPage() {
           title="This live session has ended."
           detail={
             query
-              ? "Live research sessions are kept on the server only while they run, and this one is gone. Start it again and Tally will redo the work fresh — nothing stale is ever shown."
-              : "Live research sessions are kept on the server only while they run, and this one is gone. Head home to start a fresh search."
+              ? "This live session has ended. Run it again — Tally redoes the work fresh, never stale."
+              : "This live session has ended. Head home to start fresh."
           }
           onRetry={
             query
@@ -165,7 +165,7 @@ export function ResearchPage() {
           detail={
             state.error
               ? state.error.message
-              : "The live connection to the research engine dropped before a verdict was ready. Nothing is shown because nothing was verified. Reconnecting picks up the same session where it left off."
+              : "The connection dropped before a verdict was ready — nothing unverified is shown. Reconnect to pick up where it left off."
           }
           onRetry={() => setAttempt((n) => n + 1)}
           retryLabel={rid !== null && !state.error ? "Reconnect" : "Retry research"}
@@ -299,7 +299,7 @@ export function ResearchPage() {
       {state.sourceItems.length > 0 ? (
         <details className="research__sources">
           <summary className="small-copy research__sources-summary">
-            See the {state.sourceCount} sources consulted so far
+            {state.sourceCount} sources so far
           </summary>
           <ul className="research__sources-list">
             {[...state.sourceItems].reverse().map((source) => (

@@ -85,8 +85,7 @@ export function RecentResearch({ limit }: RecentResearchProps) {
 
       {state.status === "ready" && state.items.length === 0 ? (
         <p className="small-copy recent__note">
-          No saved research yet. Run your first search above and it will be
-          waiting for you here.
+          No saved research yet — your searches will land here.
         </p>
       ) : null}
 

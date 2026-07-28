@@ -180,6 +180,7 @@ function buildBestFit(raw: unknown, knownSourceIds: ReadonlySet<string>, rationa
     cons: cons.length > 0 ? cons : [NO_EVIDENCED_CONS],
     whyBest: str(r.whyBest) ?? rationale,
     sourceIds: strArr(r.sourceIds, 30).filter((id) => knownSourceIds.has(id)),
+    imageUrl: null,
   };
 }
 
@@ -214,6 +215,7 @@ function buildAlternatives(raw: unknown): Alternative[] {
   const keyIndex = firstKey === -1 ? 0 : firstKey;
   return picked.map((p, i) => ({
     rank: i + 2,
+    imageUrl: null,
     name: p.name,
     priceRange: p.priceRange,
     ratingValue: p.ratingValue,
@@ -336,6 +338,48 @@ export type AssembleInput = {
   };
 };
 
+/**
+ * Near-duplicate dedupe for "where sources disagree": evidence batches and
+ * synthesis restate the same conflict in different words (prefix keys miss
+ * them — a real report shipped the clamping-force dispute four times). Items
+ * whose content-word overlap with an already-kept item exceeds half the
+ * smaller set are dropped; the section is hard-capped so it stays a readable
+ * digest, not a word wall. Pure.
+ */
+export function dedupeDisagreements(items: readonly string[]): string[] {
+  const contentWords = (s: string): Set<string> =>
+    new Set(
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]+/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 3),
+    );
+  const keptWordSets: Set<string>[] = [];
+  const keptLabels = new Set<string>();
+  return items
+    .map((s) => s.trim())
+    .filter((s) => {
+      if (s === "") return false;
+      const words = contentWords(s);
+      if (words.size === 0) return false;
+      // "Topic label:" prefixes repeat verbatim across restatements.
+      const colon = s.indexOf(":");
+      const label =
+        colon > 0 && colon < 60 ? s.slice(0, colon).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() : null;
+      if (label !== null && keptLabels.has(label)) return false;
+      for (const kept of keptWordSets) {
+        let overlap = 0;
+        for (const w of words) if (kept.has(w)) overlap += 1;
+        if (overlap / Math.min(words.size, kept.size) > 0.35) return false;
+      }
+      if (label !== null) keptLabels.add(label);
+      keptWordSets.push(words);
+      return true;
+    })
+    .slice(0, 5);
+}
+
 export function assembleReport(input: AssembleInput): Report {
   const synth = rec(input.synthesis);
   if (synth === null) throw new SanitizeError("Synthesis output is not a JSON object");
@@ -348,19 +392,10 @@ export function assembleReport(input: AssembleInput): Report {
   const verdictBase = buildVerdict(synth.verdict);
   const verdict = enforceSourceDiversity(verdictBase, sources.length, classes);
   const bestFit = buildBestFit(synth.bestFit, knownSourceIds, verdictBase.rationale);
-  // Near-duplicate dedupe: evidence batches and synthesis often restate the
-  // same conflict with slightly different tails; key on a normalized prefix.
-  const seenDisagreementKeys = new Set<string>();
-  const disagreements = [...input.meta.evidenceDisagreements, ...strArr(synth.disagreements, 10)]
-    .map((s) => s.trim())
-    .filter((s) => {
-      if (s === "") return false;
-      const key = s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 90);
-      if (seenDisagreementKeys.has(key)) return false;
-      seenDisagreementKeys.add(key);
-      return true;
-    })
-    .slice(0, 10);
+  const disagreements = dedupeDisagreements([
+    ...input.meta.evidenceDisagreements,
+    ...strArr(synth.disagreements, 10),
+  ]);
 
   // Post-evidence category correction: when classification was uncertain
   // (e.g. a bare SKU), the synthesize stage re-states the category with

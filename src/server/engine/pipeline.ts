@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   CategoryIdSchema,
   QueryTypeSchema,
+  ReportSchema,
   type Assumption,
   type Location,
   type PlanQuestion,
@@ -24,6 +25,7 @@ import {
   shouldStopDeepEvidence,
 } from "./controls";
 import { PROMPTS, promptVersions } from "./prompts";
+import { harvestImages, type ImageTask } from "./images";
 import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
 import { domainFromChunk, usableChunks, type RawChunk } from "./sources";
 import { getReport, saveReport, saveServerEvent } from "../db";
@@ -649,9 +651,62 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     },
   });
 
-  emit({ type: "report", report });
+  // 5b. Real product imagery — og:image from pages this research actually
+  // cited (retailer listings first, then sources). Hard 4s budget; a miss
+  // stays null. Never stock, never generated.
+  ctx.stage = "product-images";
+  const sourceUrlById = new Map(report.sources.map((s) => [s.id, s.url]));
+  const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const citedRetailerUrls = (name: string): string[] => {
+    const n = normName(name);
+    return evidenceOutputs
+      .flatMap((e) => e.candidates)
+      .filter((c) => {
+        const cn = normName(c.name);
+        return cn !== "" && n !== "" && (cn.includes(n) || n.includes(cn));
+      })
+      .flatMap((c) => c.retailerMentions)
+      .map((r) => r.url)
+      .filter((u): u is string => typeof u === "string" && u.startsWith("http"));
+  };
+  const imageTasks: ImageTask[] = [
+    {
+      key: "bestFit",
+      urls: [
+        ...report.retailers.map((r) => r.url).filter((u): u is string => u !== null),
+        ...citedRetailerUrls(report.bestFit.name),
+        ...report.bestFit.sourceIds
+          .map((id) => sourceUrlById.get(id))
+          .filter((u): u is string => u !== undefined),
+      ],
+    },
+    ...report.alternatives
+      .slice(0, 4)
+      .map((alt) => ({ key: `alt-${alt.rank}`, urls: citedRetailerUrls(alt.name) })),
+  ].filter((task) => task.urls.length > 0);
+  let finalReport = report;
+  if (imageTasks.length > 0) {
+    emit({ type: "stage", stage: "product-images", status: "started", elapsedMs: elapsed(), detail: "from cited pages" });
+    const images = await harvestImages(imageTasks, 4000);
+    const withImages = {
+      ...report,
+      bestFit: { ...report.bestFit, imageUrl: images["bestFit"] ?? null },
+      alternatives: report.alternatives.map((alt) => ({
+        ...alt,
+        imageUrl: images[`alt-${alt.rank}`] ?? null,
+      })),
+    };
+    // A harvested URL must never break the validated contract — on any
+    // mismatch the report ships without images rather than failing.
+    const revalidated = ReportSchema.safeParse(withImages);
+    finalReport = revalidated.success ? revalidated.data : report;
+    emit({ type: "stage", stage: "product-images", status: "completed", elapsedMs: elapsed() });
+  }
+  const report2 = finalReport;
+
+  emit({ type: "report", report: report2 });
   try {
-    saveReport(report);
+    saveReport(report2);
   } catch (err) {
     // The user still gets their report; persistence failure is logged loudly.
     console.error("[pipeline] saveReport failed", err);
@@ -661,23 +716,23 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // write must never break the response.
   if (!input.noCache && !personalized) {
     try {
-      remember(query, input.mode, report, cacheScope);
+      remember(query, input.mode, report2, cacheScope);
     } catch (err) {
       console.error("[pipeline] cache remember failed", err);
     }
   }
   recordServerEvent(ids, {
     name: "report_completed",
-    reportId: report.id,
-    queryType: report.queryType,
-    category: report.category.id,
-    mode: report.meta.mode,
-    confidence: report.verdict.confidence,
-    sourceCount: report.sources.length,
-    sourceClassCount: report.meta.sourceDiversity.classesRepresented.length,
-    disagreementCount: report.meta.disagreements.length,
-    totalMs: report.meta.totalMs,
-    playbookVersion: report.meta.playbookVersion,
+    reportId: report2.id,
+    queryType: report2.queryType,
+    category: report2.category.id,
+    mode: report2.meta.mode,
+    confidence: report2.verdict.confidence,
+    sourceCount: report2.sources.length,
+    sourceClassCount: report2.meta.sourceDiversity.classesRepresented.length,
+    disagreementCount: report2.meta.disagreements.length,
+    totalMs: report2.meta.totalMs,
+    playbookVersion: report2.meta.playbookVersion,
   });
-  return report;
+  return report2;
 }

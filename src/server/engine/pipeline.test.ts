@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveAssumptions } from "./pipeline";
 import type { AssembleInput } from "./sanitize";
-import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
+import { assembleReport, dedupeDisagreements, parsePrice, SanitizeError } from "./sanitize";
 import { classifySource, domainFromChunk, type RawChunk } from "./sources";
 
 /** Unit tests for the pure sanitize/assemble step. No network. */
@@ -369,5 +369,33 @@ describe("assembleReport — location + local retailers (M3 gate 2)", () => {
 
   it("defaults report.location to null when none is supplied", () => {
     expect(assembleReport(baseInput()).location).toBeNull();
+  });
+});
+
+// Regression (owner PDF 2026-07-27): a live Bose A20 report shipped the same
+// clamping-force dispute four times in "where sources disagree".
+describe("dedupeDisagreements", () => {
+  it("drops restated conflicts and hard-caps the list", () => {
+    const items = [
+      "Clamping force and comfort: Some sources state the Bose A30 is the most comfortable headset ever made due to its 20% reduced clamping force compared to the A20.",
+      "Sharp divide between pilots regarding the Bose A30's reduced clamping force: Bose markets it as a comfort upgrade, while real-world reviews complain it is too loose and slips off.",
+      "Clamping force and comfort: Bose markets the A30's 20% reduced clamping force as a major comfort upgrade, but many pilots find it too loose, causing it to slip off easily.",
+      "ANR performance: editorial reviews praise the digital ANR while owner forums argue it struggles when turning the head.",
+      "Pricing discrepancies: used A20s range from $600 to $1,399 depending on the marketplace.",
+      "Tap-control controversy: some pilots find the tap feature convenient while others report accidental triggers from cockpit bumps.",
+      "Build quality dispute: plastic construction feels cheaper to some users than the magnesium-alloy A20.",
+      "Outdated information: 2022 forum posts speculate about an A20 upgrade that became the A30.",
+    ];
+    const deduped = dedupeDisagreements(items);
+    expect(deduped.length).toBeLessThanOrEqual(5);
+    const clampCount = deduped.filter((d) => /clamping/i.test(d)).length;
+    expect(clampCount).toBe(1);
+  });
+
+  it("keeps genuinely distinct items and drops empties", () => {
+    expect(dedupeDisagreements(["", "  ", "Price conflict between retailers.", "Battery life claims differ across reviews."])).toEqual([
+      "Price conflict between retailers.",
+      "Battery life claims differ across reviews.",
+    ]);
   });
 });

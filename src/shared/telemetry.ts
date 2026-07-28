@@ -141,7 +141,7 @@ const comparisonUsed = z.object({
 const shareCreated = z.object({
   name: z.literal("share_created"),
   reportId: z.string().min(1),
-  surface: z.enum(["report", "compare", "prices"]),
+  surface: z.enum(["report", "compare", "prices", "share-page"]),
 });
 
 /** A public share page was viewed (the visitor side of the loop). */

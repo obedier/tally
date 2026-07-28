@@ -11,13 +11,6 @@ import { SourcesSheet } from "./SourcesSheet";
 import { useReport, useReportViewed, useSavedPick, type SavedPickControls } from "./useReport";
 import "./report.css";
 
-/** Ambient category object art — decor for the verdict, never a product photo. */
-const CATEGORY_ART: Record<string, string> = {
-  "consumer-electronics": "/product-images/catalog-vacuum.png",
-  "home-goods": "/product-images/dutch-oven.png",
-  other: "/product-images/linen-bedding.png",
-};
-
 const MODE_KICKERS: Record<ResearchMode, string> = {
   quick: "Quick research report",
   full: "Full research report",
@@ -70,15 +63,6 @@ function ReportSummary({ report }: { report: Report }) {
       <PageTop back={{ to: "/", label: "Home" }} />
 
       <header className="report__lead">
-        <img
-          className="report__ambient"
-          src={CATEGORY_ART[report.category.id] ?? CATEGORY_ART.other}
-          alt=""
-          aria-hidden="true"
-          width={96}
-          height={118}
-          loading="lazy"
-        />
         <p className="kicker report__eyebrow">
           {MODE_KICKERS[report.meta.mode]} · {verdict.confidence} confidence
           <button
@@ -119,6 +103,16 @@ function ReportSummary({ report }: { report: Report }) {
             {bestFit.priceRange.display} <span aria-hidden="true">›</span>
           </Link>
         </div>
+        {bestFit.imageUrl ? (
+          <img
+            className="report__product-img"
+            src={bestFit.imageUrl}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(event) => event.currentTarget.remove()}
+          />
+        ) : null}
         <h2 className="display display--title">{bestFit.name}</h2>
         {bestFit.rating ? (
           <p className="small-copy report__rating">

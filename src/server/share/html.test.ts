@@ -32,6 +32,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
       cons: ["Not foldable", "Case is bulky"],
       whyBest: "Best noise cancellation and comfort for frequent flyers.",
       sourceIds: ["s1"],
+      imageUrl: null,
     },
     alternatives: [
       {
@@ -44,6 +45,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
         cons: ["Pricier"],
         reviewSummary: "Reviewers like the immersive mode.",
         isKeyAlternative: true,
+      imageUrl: null,
       },
     ],
     retailers: [],

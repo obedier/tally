@@ -54,6 +54,7 @@ function makeReport(id: string, overrides: ReportOverrides = {}): Report {
       cons: ["Bulky case"],
       whyBest: "Fits the budget with the best battery.",
       sourceIds: ["s1"],
+      imageUrl: null,
     },
     alternatives: [
       {
@@ -66,6 +67,7 @@ function makeReport(id: string, overrides: ReportOverrides = {}): Report {
         cons: ["Weaker ANC"],
         reviewSummary: "Reviewers like the fit.",
         isKeyAlternative: true,
+      imageUrl: null,
       },
     ],
     retailers: [

@@ -55,6 +55,7 @@ function makeReport(id: string, createdAt: string, query = "best budget headphon
       cons: ["Bulky case"],
       whyBest: "Fits the budget with the best battery.",
       sourceIds: ["s1"],
+      imageUrl: null,
     },
     alternatives: [
       {
@@ -67,6 +68,7 @@ function makeReport(id: string, createdAt: string, query = "best budget headphon
         cons: ["Weaker ANC"],
         reviewSummary: "Reviewers like the fit, note weaker noise cancelling.",
         isKeyAlternative: true,
+      imageUrl: null,
       },
     ],
     retailers: [

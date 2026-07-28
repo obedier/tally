@@ -94,8 +94,8 @@ function Comparison({ report }: { report: Report }) {
       <p className="kicker">Comparison</p>
       <h1 className="display display--headline">{report.query}</h1>
       <p className="small-copy compare__intro">
-        The best fit against the {alternatives.length} strongest alternatives this
-        research surfaced, ranked for your assumptions.
+        The best fit vs the {alternatives.length} strongest alternatives, ranked
+        for your assumptions.
       </p>
 
       <div className="compare__view" role="radiogroup" aria-label="Comparison layout">
@@ -140,8 +140,7 @@ function Comparison({ report }: { report: Report }) {
             </tbody>
           </table>
           <p className="micro-copy compare-table__note">
-            Rows without a value show &ldquo;—&rdquo; — nothing is filled in that the
-            evidence didn&rsquo;t verify. Switch to Cards for full pros and cons.
+            &ldquo;—&rdquo; means the evidence didn&rsquo;t verify it. Cards show full pros and cons.
           </p>
         </div>
       ) : null}
@@ -153,6 +152,7 @@ function Comparison({ report }: { report: Report }) {
           rank={1}
           name={bestFit.name}
           ratingValue={bestFit.rating?.value ?? null}
+          imageUrl={bestFit.imageUrl}
           priceDisplay={bestFit.priceRange.display}
           tradeoff={bestFit.whyBest}
           reviewSummary={bestFit.rating?.summary ?? null}
@@ -168,6 +168,7 @@ function Comparison({ report }: { report: Report }) {
             rank={alternative.rank}
             name={alternative.name}
             ratingValue={alternative.ratingValue}
+            imageUrl={alternative.imageUrl}
             priceDisplay={alternative.priceRange ? alternative.priceRange.display : null}
             tradeoff={alternative.note}
             reviewSummary={alternative.reviewSummary}
@@ -193,6 +194,8 @@ interface CompareCardProps {
   rank: number;
   name: string;
   ratingValue: number | null;
+  /** Image from a cited page; null hides the slot (never a placeholder). */
+  imageUrl: string | null;
   priceDisplay: string | null;
   tradeoff: string;
   /** One-line review digest; null omits the row entirely (never a placeholder). */
@@ -213,6 +216,7 @@ function CompareCard({
   rank,
   name,
   ratingValue,
+  imageUrl,
   priceDisplay,
   tradeoff,
   reviewSummary,
@@ -226,6 +230,16 @@ function CompareCard({
       className={`compare-card${lead ? " compare-card--lead" : ""}${keyAlternative ? " compare-card--key" : ""}`}
       role={role}
     >
+      {imageUrl ? (
+        <img
+          className="compare-card__img"
+          src={imageUrl}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={(event) => event.currentTarget.remove()}
+        />
+      ) : null}
       <header className="compare-card__head">
         <span className={`compare-card__rank${lead ? " compare-card__rank--lead" : ""}`}>#{rank}</span>
         <h2 className="compare-card__name">{name}</h2>
