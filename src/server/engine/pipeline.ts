@@ -467,7 +467,10 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       const result = await runStage(
         stageName,
         async () => {
-          const res = await callGemini(
+          // Step 1 — grounded FREE TEXT so the search tool actually runs
+          // (JSON-demand prompts make newer models skip search and answer from
+          // memory — fabricated "evidence"; see prompts.ts evidence v2.0.0).
+          const research = await callGemini(
             {
               apiKey,
               model,
@@ -483,9 +486,34 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
                 concise: input.mode === "quick",
               }),
             },
-            (text) => EvidenceSchema.parse(extractJson(text)),
+            (text) => text,
           );
-          return { value: res, retries: res.retries };
+          // Step 2 — ungrounded structuring; the notes are the only source.
+          // Fast model first, main model as fallback (same policy as classify).
+          const structurePrompt = PROMPTS.evidenceStructure.build({
+            notes: research.data,
+            questionIds: group.map((q) => q.id),
+          });
+          const structureOnce = async (m: string) =>
+            callGemini(
+              { apiKey, model: m, grounded: false, prompt: structurePrompt },
+              (text) => EvidenceSchema.parse(extractJson(text)),
+            );
+          let structured;
+          try {
+            structured = await structureOnce(env.geminiFastModel);
+          } catch (err) {
+            if (env.geminiFastModel === model) throw err;
+            console.error(
+              "[pipeline] fast-model evidence structuring failed; falling back to main model",
+              err instanceof Error ? err.message : err,
+            );
+            structured = await structureOnce(model);
+          }
+          return {
+            value: { data: structured.data, sources: research.sources },
+            retries: research.retries + structured.retries,
+          };
         },
         `${group.length} question${group.length === 1 ? "" : "s"}`,
       );

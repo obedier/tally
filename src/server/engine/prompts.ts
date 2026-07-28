@@ -26,6 +26,13 @@ export type EvidencePromptArgs = {
   readonly concise?: boolean;
 };
 
+export type EvidenceStructurePromptArgs = {
+  /** The grounded free-text research notes from evidence step 1. */
+  readonly notes: string;
+  /** Valid plan-question ids the findings may reference. */
+  readonly questionIds: readonly string[];
+};
+
 export type SynthesizePromptArgs = {
   readonly query: string;
   readonly queryType: string;
@@ -72,8 +79,15 @@ Rules:
 - If nothing query-specific is needed beyond a standard playbook, return an empty extraQuestions array.`,
   },
 
+  /**
+   * Two-step evidence (v2.0.0): newer Gemini models silently skip the search
+   * tool when the prompt demands JSON-only output, which would fabricate
+   * ungrounded "evidence". Step 1 (this prompt) is grounded FREE TEXT so search
+   * actually runs; step 2 (evidenceStructure below, ungrounded) converts the
+   * notes to the JSON contract. The version covers the pair.
+   */
   evidence: {
-    version: "1.2.0",
+    version: "2.0.0",
     build: ({ query, categoryLabel, criteria, assumptions, questions, location, locationKnown, concise }: EvidencePromptArgs): string => `${PERSONA}
 
 Research task for the query: "${query}" (category: ${categoryLabel}).
@@ -91,23 +105,38 @@ ${
         : ""
     }
 ${ANTI_FABRICATION_RULE}
-Report prices as plain numbers only when the search evidence actually shows them; otherwise use null.
-For each candidate, capture "rating": its average user or editorial rating out of 5 ONLY when a source states one (convert 10-point scales to 5); otherwise null — never estimate one.
-If a candidate is discontinued or has a direct successor model, say so in its "notes".
-Note explicitly where sources disagree with each other and where data looks stale or outdated.
-Include retailer URLs only when they appeared in the evidence.
+Write your findings as plain-text research notes with exactly these sections:
+
+FINDINGS — one short paragraph per question, each starting with its id in brackets (e.g. [${questions[0]?.id ?? "q1"}]), summarizing what current sources actually show.
+
+CANDIDATES — the products in contention, best-first for this user's assumptions. For each: its name, then ONLY facts the sources state — price range in USD, average rating out of 5 (convert 10-point scales), what reviews agree on, retailer names and URLs that appeared in the evidence, whether it is discontinued or has a direct successor, and one honest note.
+
+DISAGREEMENTS — concrete conflicts between sources, and anything that looks stale or outdated.
+
+Report prices as numbers only when the search evidence actually shows them. Never estimate a rating no source states. Omit anything the sources don't support — never fill gaps from memory.${
+      concise === true
+        ? "\nThis is a QUICK scan: at most 5 candidates and one terse sentence per finding."
+        : ""
+    }`,
+  },
+
+  /** Step 2 of evidence: ungrounded, JSON-only, notes are the ONLY source. */
+  evidenceStructure: {
+    version: "1.0.0",
+    build: ({ notes, questionIds }: EvidenceStructurePromptArgs): string => `${PERSONA}
+
+Convert the research notes below into JSON. The notes are your ONLY factual source — copy facts from them verbatim and use null or [] wherever the notes are silent. Never add outside knowledge, never estimate.
+
+RESEARCH NOTES:
+${notes}
 
 Respond with ONLY a JSON object (no markdown fences, no commentary before or after):
 {
   "candidates": [ { "name": string, "priceMin": number or null, "priceMax": number or null, "currency": "USD", "rating": number 0-5 or null, "reviewThemes": [ short strings summarizing what reviews agree on ], "retailerMentions": [ { "seller": string, "url": string or null } ], "notes": string or null } ],
-  "findings": [ { "questionId": one of the ids above, "summary": string } ],
+  "findings": [ { "questionId": one of ${JSON.stringify(questionIds)}, "summary": string } ],
   "disagreements": [ strings describing concrete conflicts between sources ]
 }
-Order candidates best-first for this user's assumptions.${
-      concise === true
-        ? "\nThis is a QUICK scan: include at most 5 candidates and keep every finding summary and note to one terse sentence."
-        : ""
-    }`,
+Keep the candidates in the notes' order (best-first).`,
   },
 
   synthesize: {
