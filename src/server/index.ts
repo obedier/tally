@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { registerResearchRoutes } from "./routes/research";
 import { registerReportRoutes } from "./routes/reports";
@@ -20,6 +21,20 @@ registerTelemetryRoutes(app);
 registerShareRoutes(app);
 registerPollRoutes(app);
 registerPriceWatchRoutes(app);
+
+// Production: this process serves the built SPA too (dev uses the Vite proxy).
+// Real files first; anything else that isn't an API/share/OG route falls back
+// to index.html so client-side routes survive a hard reload.
+if (process.env.NODE_ENV === "production") {
+  app.use("*", serveStatic({ root: "./dist/client" }));
+  app.get("*", (c, next) => {
+    const path = c.req.path;
+    if (path.startsWith("/api/") || path.startsWith("/s/") || path.startsWith("/og/")) {
+      return next();
+    }
+    return serveStatic({ path: "./dist/client/index.html" })(c, next);
+  });
+}
 
 const port = Number(process.env.PORT ?? 8787);
 serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
