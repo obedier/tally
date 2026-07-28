@@ -283,6 +283,67 @@ function isCompetitorBrandSeller(
   });
 }
 
+/**
+ * Grounded search redirects hide real product-page paths, so the model only
+ * ever reports retailer HOMEPAGES — every listing landed on a generic front
+ * page. For known retailers, deep-link to their own product search for the
+ * best fit instead. Evidence-provided product-page URLs (a real path) pass
+ * through untouched; unknown retailers keep whatever the evidence gave.
+ */
+const RETAILER_SEARCH_URLS: ReadonlyArray<readonly [RegExp, (q: string) => string]> = [
+  [/(^|\.)amazon\.com$/, (q) => `https://www.amazon.com/s?k=${q}`],
+  [/(^|\.)walmart\.com$/, (q) => `https://www.walmart.com/search?q=${q}`],
+  [/(^|\.)bestbuy\.com$/, (q) => `https://www.bestbuy.com/site/searchpage.jsp?st=${q}`],
+  [/(^|\.)target\.com$/, (q) => `https://www.target.com/s?searchTerm=${q}`],
+  [/(^|\.)costco\.com$/, (q) => `https://www.costco.com/CatalogSearch?dept=All&keyword=${q}`],
+  [/(^|\.)homedepot\.com$/, (q) => `https://www.homedepot.com/s/${q}`],
+  [/(^|\.)lowes\.com$/, (q) => `https://www.lowes.com/search?searchTerm=${q}`],
+  [/(^|\.)wayfair\.com$/, (q) => `https://www.wayfair.com/keyword.php?keyword=${q}`],
+  [/(^|\.)ebay\.com$/, (q) => `https://www.ebay.com/sch/i.html?_nkw=${q}`],
+  [/(^|\.)bhphotovideo\.com$/, (q) => `https://www.bhphotovideo.com/c/search?q=${q}`],
+];
+
+/** Seller display name -> canonical domain, for rows with no URL at all. */
+const SELLER_DOMAINS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^amazon/i, "www.amazon.com"],
+  [/^walmart/i, "www.walmart.com"],
+  [/^best\s*buy/i, "www.bestbuy.com"],
+  [/^target/i, "www.target.com"],
+  [/^costco/i, "www.costco.com"],
+  [/^home\s*depot/i, "www.homedepot.com"],
+  [/^lowe/i, "www.lowes.com"],
+  [/^wayfair/i, "www.wayfair.com"],
+  [/^ebay/i, "www.ebay.com"],
+  [/^b&h/i, "www.bhphotovideo.com"],
+];
+
+export function deepRetailerUrl(
+  url: string | null,
+  seller: string,
+  productName: string | null,
+): string | null {
+  if (productName === null || productName.trim() === "") return url;
+  let host = "";
+  let hasRealPath = false;
+  if (url !== null) {
+    try {
+      const u = new URL(url);
+      host = u.hostname.replace(/^www\./, "");
+      hasRealPath = u.pathname !== "/" && u.pathname !== "";
+    } catch {
+      return url;
+    }
+  } else {
+    const match = SELLER_DOMAINS.find(([re]) => re.test(seller.trim()));
+    if (match === undefined) return null;
+    host = match[1].replace(/^www\./, "");
+  }
+  if (hasRealPath) return url;
+  const template = RETAILER_SEARCH_URLS.find(([re]) => re.test(host));
+  if (template === undefined) return url;
+  return template[1](encodeURIComponent(productName.trim()));
+}
+
 function buildRetailers(
   raw: unknown,
   bestFitName: string | null,
@@ -307,7 +368,7 @@ function buildRetailers(
           kind,
           price: priceFrom(r),
           availability: str(r.availability) ?? "Check retailer",
-          url: safeUrl(r.url),
+          url: deepRetailerUrl(safeUrl(r.url), seller, bestFitName),
           locality,
         },
       ];

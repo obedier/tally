@@ -11,9 +11,12 @@ type ShareSurface = "report" | "compare" | "prices";
 export function ShareButton({
   reportId,
   surface,
+  variant = "primary",
 }: {
   reportId: string;
   surface: ShareSurface;
+  /** "quiet" is for a second share affordance on the same page — one primary only. */
+  variant?: "primary" | "quiet";
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -34,7 +37,11 @@ export function ShareButton({
   };
 
   return (
-    <button type="button" className="report__share" onClick={share}>
+    <button
+      type="button"
+      className={`report__share${variant === "quiet" ? " report__share--quiet" : ""}`}
+      onClick={share}
+    >
       <span aria-hidden="true">↗</span> {copied ? "Link copied" : "Share this research"}
     </button>
   );

@@ -672,6 +672,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   const imageTasks: ImageTask[] = [
     {
       key: "bestFit",
+      name: report.bestFit.name,
       urls: [
         ...report.retailers.map((r) => r.url).filter((u): u is string => u !== null),
         ...citedRetailerUrls(report.bestFit.name),
@@ -682,7 +683,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     },
     ...report.alternatives
       .slice(0, 4)
-      .map((alt) => ({ key: `alt-${alt.rank}`, urls: citedRetailerUrls(alt.name) })),
+      .map((alt) => ({ key: `alt-${alt.rank}`, name: alt.name, urls: citedRetailerUrls(alt.name) })),
   ].filter((task) => task.urls.length > 0);
   let finalReport = report;
   if (imageTasks.length > 0) {

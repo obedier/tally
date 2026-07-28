@@ -140,7 +140,7 @@ Keep the candidates in the notes' order (best-first).`,
   },
 
   synthesize: {
-    version: "1.4.0",
+    version: "1.5.0",
     build: ({ query, queryType, categoryLabel, criteria, assumptions, evidenceNotes, sourceList, location, locationKnown, concise }: SynthesizePromptArgs): string => `${PERSONA}
 
 Synthesize a final product-research report for: "${query}" (query type: ${queryType}, category: ${categoryLabel}).
@@ -162,6 +162,9 @@ ${sourceList}
 
 ${ANTI_FABRICATION_RULE}
 Rules:
+- VOICE: write to the reader as "you", the way a knowledgeable friend talks. Never "the user", "the buyer", "their stated needs", or any third-person description of the person reading. No preamble restating what they asked for — they know.
+- LENGTH IS A HARD LIMIT, not a target. "rationale": at most 45 words. "whyBest": at most 35 words. Each alternative "note": at most 25 words. Every "pros"/"cons"/"decisiveFactors" entry: at most 15 words. Say less than the limit whenever the point is already made.
+- "rationale" and "whyBest" must NOT repeat each other. "rationale" says why this is the call for you; "whyBest" adds what the rationale did not — the concrete detail that clinches it. If you cannot add something new, make "whyBest" shorter, never a restatement.
 - The verdict "headline" is ONE short sentence, at most 18 words, that a user could repeat verbatim to a friend. Put the full reasoning in "rationale", not the headline.
 - "confidenceReason" must honestly describe the strength AND the gaps of the evidence; never claim confidence the sources do not support.
 - Rank alternatives best-first. Exactly ONE alternative has "isKeyAlternative": true — the strongest pick for a different priority.

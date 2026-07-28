@@ -225,7 +225,7 @@ function ReportSummary({ report }: { report: Report }) {
       ) : null}
 
       <div className="report__share-row">
-        <ShareButton reportId={report.id} surface="report" />
+        <ShareButton reportId={report.id} surface="report" variant="quiet" />
       </div>
 
       <FeedbackButtons reportId={report.id} />

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveAssumptions } from "./pipeline";
 import type { AssembleInput } from "./sanitize";
-import { assembleReport, dedupeDisagreements, parsePrice, safeUrl, SanitizeError } from "./sanitize";
+import { assembleReport, dedupeDisagreements, deepRetailerUrl, parsePrice, safeUrl, SanitizeError } from "./sanitize";
 import { classifySource, domainFromChunk, type RawChunk } from "./sources";
 
 /** Unit tests for the pure sanitize/assemble step. No network. */
@@ -403,6 +403,37 @@ describe("dedupeDisagreements", () => {
 // Regression (live prod report 2026-07-27): evidence delivered geni.us — an
 // affiliate link shortener — as Amazon's retailer URL. Independence means no
 // monetized links, ever.
+// Regression (owner PDF 2026-07-28): grounded search only yields retailer
+// homepages, so every listing landed on a generic front page.
+describe("deepRetailerUrl", () => {
+  it("rewrites known-retailer homepages to a product search", () => {
+    expect(deepRetailerUrl("https://www.walmart.com", "Walmart", "Dyson V12 Detect Slim")).toBe(
+      "https://www.walmart.com/search?q=Dyson%20V12%20Detect%20Slim",
+    );
+    expect(deepRetailerUrl("https://www.bestbuy.com/", "Best Buy", "Bose A30")).toBe(
+      "https://www.bestbuy.com/site/searchpage.jsp?st=Bose%20A30",
+    );
+  });
+
+  it("keeps evidence-provided product-page URLs untouched", () => {
+    const deep = "https://www.walmart.com/ip/dyson-v12/5231447079";
+    expect(deepRetailerUrl(deep, "Walmart", "Dyson V12")).toBe(deep);
+  });
+
+  it("maps a bare seller name to its search when no URL exists", () => {
+    expect(deepRetailerUrl(null, "Amazon", "Dyson V12")).toBe(
+      "https://www.amazon.com/s?k=Dyson%20V12",
+    );
+    expect(deepRetailerUrl(null, "Bob's Vacuums", "Dyson V12")).toBeNull();
+  });
+
+  it("unknown-domain homepages pass through unchanged", () => {
+    expect(deepRetailerUrl("https://www.dyson.com", "Dyson", "Dyson V12")).toBe(
+      "https://www.dyson.com",
+    );
+  });
+});
+
 describe("safeUrl independence", () => {
   it("drops affiliate shorteners outright", () => {
     expect(safeUrl("https://geni.us/Gx1nCkn")).toBeNull();

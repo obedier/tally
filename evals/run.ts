@@ -107,6 +107,13 @@ function gradeCase(c: GoldenCase, report: Report): Record<string, { pass: boolea
     detail: `headline ${report.verdict.headline.length} chars, ${report.verdict.decisiveFactors.length} decisive factors`,
   };
 
+  // Ratchet (2026-07-28): the owner's live reports carried a 90-word rationale
+  // written about "the user" in third person — a word wall no UI trim could
+  // fix, and nothing in this suite could catch. Prose length and voice are now
+  // graded. Limits carry slack over the prompt's caps (45/35 words) so honest
+  // near-misses pass and only real regressions fail.
+  checks.conciseVoice = gradeProse(report);
+
   if (c.expect.assumptionHints.length > 0) {
     checks.sensibleAssumptions = gradeAssumptions(report, c);
   }
@@ -130,6 +137,48 @@ const DECISION_VOCAB = [
   "quality", "durab", "reliab", "comfort", "noise", "quiet", "performance", "battery", "warranty",
   "prioriti", "prefer",
 ];
+
+/** Third-person references to the reader — the analyst-memo voice, banned. */
+const THIRD_PERSON_RE =
+  /\b(the|this)\s+(user|buyer|shopper|customer|reader)\b|\btheir\s+(stated|specified|given)\b/i;
+
+const RATIONALE_MAX_WORDS = 60;
+const WHY_BEST_MAX_WORDS = 50;
+
+const wordCount = (text: string): number =>
+  text.trim().split(/\s+/).filter((w) => w !== "").length;
+
+/**
+ * Grades the two prose fields a reader meets first. Fails on a word wall or on
+ * third-person voice; both were real defects in shipped reports. Exported for
+ * offline validation against collected reports.
+ */
+export function gradeProse(report: Report): { pass: boolean; detail: string } {
+  const rationale = report.verdict.rationale;
+  const whyBest = report.bestFit.whyBest;
+  const problems: string[] = [];
+
+  const rationaleWords = wordCount(rationale);
+  const whyBestWords = wordCount(whyBest);
+  if (rationaleWords > RATIONALE_MAX_WORDS) {
+    problems.push(`rationale ${rationaleWords}w > ${RATIONALE_MAX_WORDS}`);
+  }
+  if (whyBestWords > WHY_BEST_MAX_WORDS) {
+    problems.push(`whyBest ${whyBestWords}w > ${WHY_BEST_MAX_WORDS}`);
+  }
+  const thirdPerson = [rationale, whyBest].find((t) => THIRD_PERSON_RE.test(t));
+  if (thirdPerson !== undefined) {
+    problems.push(`third-person voice: "${THIRD_PERSON_RE.exec(thirdPerson)?.[0] ?? ""}"`);
+  }
+
+  return {
+    pass: problems.length === 0,
+    detail:
+      problems.length === 0
+        ? `rationale ${rationaleWords}w, whyBest ${whyBestWords}w, second person`
+        : problems.join("; "),
+  };
+}
 
 export function gradeAssumptions(
   report: Report,

@@ -257,9 +257,9 @@ footer.attribution{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(-
   background:var(--green-wash);border:1px solid var(--line);border-radius:999px;
   padding:.35rem .9rem;cursor:pointer}
 .share-btn:hover{background:var(--green);color:var(--on-green)}
-.product-img{float:right;width:96px;height:96px;object-fit:contain;margin:0 0 .5rem .75rem;
-  border-radius:8px;background:#fff;border:1px solid var(--line)}
-.product-img--sm{width:64px;height:64px}
+.product-img{display:block;width:100%;height:200px;object-fit:contain;padding:.75rem;
+  margin:0 0 .75rem;border-radius:8px;background:#fff;border:1px solid var(--line)}
+.product-img--sm{height:130px}
 .confidence-wrap{margin:.25rem 0 0}
 .confidence-wrap summary{list-style:none;cursor:pointer;display:inline-block}
 .confidence-wrap summary::-webkit-details-marker{display:none}

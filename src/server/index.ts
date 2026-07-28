@@ -26,6 +26,17 @@ registerPriceWatchRoutes(app);
 // Real files first; anything else that isn't an API/share/OG route falls back
 // to index.html so client-side routes survive a hard reload.
 if (process.env.NODE_ENV === "production") {
+  // Hashed assets are immutable; everything else (index.html, images) must
+  // revalidate — a cached index.html pins users to a stale JS bundle for days.
+  app.use("*", async (c, next) => {
+    await next();
+    if (c.req.path.startsWith("/api/")) return;
+    if (c.req.path.startsWith("/assets/")) {
+      c.header("Cache-Control", "public, max-age=31536000, immutable");
+    } else {
+      c.header("Cache-Control", "no-cache");
+    }
+  });
   app.use("*", serveStatic({ root: "./dist/client" }));
   app.get("*", (c, next) => {
     const path = c.req.path;
