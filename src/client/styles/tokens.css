@@ -47,6 +47,13 @@
   --space-7: 3.5rem;
   --space-section: clamp(2.5rem, 1.75rem + 4vw, 4.5rem);
 
+  /* Device safe areas. Both are 0 in a browser tab and non-zero in the native
+     shell, whose webview runs full-bleed under the notch and home indicator.
+     Any rule that sets a page's own top or bottom padding must add these, or
+     it silently overrides the shell's inset — see .home. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
   /* Layout */
   --column-max: 680px;
   --hero-max: 860px;

@@ -1,9 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
+  candidateUrls,
   extractJsonLdProductImage,
   extractOgImage,
+  harvestImage,
   isLikelyGenericImage,
   isRootUrl,
+  isSearchUrl,
   nameTokens,
   pageMatchesProduct,
 } from "./images";
@@ -115,5 +118,122 @@ describe("extractJsonLdProductImage", () => {
   test("generic/logo images still rejected", () => {
     const html = `<script type="application/ld+json">{"@type":"Product","image":"https://x.com/site-logo.png"}</script>`;
     expect(extractJsonLdProductImage(html, "https://x.com")).toBeNull();
+  });
+});
+
+describe("isSearchUrl", () => {
+  test("recognises the retailer search URLs we link shoppers to", () => {
+    // These are exactly what deepRetailerUrl() produces from a bare homepage.
+    expect(isSearchUrl("https://www.amazon.com/s?k=Dyson%20V12")).toBe(true);
+    expect(isSearchUrl("https://www.walmart.com/search?q=Dyson%20V12")).toBe(true);
+    expect(isSearchUrl("https://www.target.com/s?searchTerm=Dyson")).toBe(true);
+    expect(isSearchUrl("https://www.bestbuy.com/site/searchpage.jsp?st=Dyson")).toBe(true);
+    expect(isSearchUrl("https://www.costco.com/CatalogSearch?keyword=Dyson")).toBe(true);
+    expect(isSearchUrl("https://www.ebay.com/sch/i.html?_nkw=Dyson")).toBe(true);
+  });
+
+  test("leaves real product and article pages alone", () => {
+    expect(isSearchUrl("https://www.bobvila.com/articles/dyson-v12-review/")).toBe(false);
+    expect(isSearchUrl("https://www.amazon.com/dp/B0BSHF7WHW")).toBe(false);
+    expect(isSearchUrl("https://www.dyson.com/vacuum-cleaners/sticks/v12")).toBe(false);
+  });
+
+  test("unparseable input is not treated as a search page", () => {
+    expect(isSearchUrl("not a url")).toBe(false);
+  });
+});
+
+describe("candidateUrls", () => {
+  test("drops homepages and search pages, which can never hold a product image", () => {
+    expect(
+      candidateUrls([
+        "https://www.dyson.com",
+        "https://www.amazon.com/s?k=Dyson",
+        "https://www.bobvila.com/articles/dyson-v12-review/",
+      ]),
+    ).toEqual(["https://www.bobvila.com/articles/dyson-v12-review/"]);
+  });
+
+  test("preserves priority order and de-duplicates", () => {
+    expect(
+      candidateUrls(["https://a.test/p", "https://b.test/p", "https://a.test/p"]),
+    ).toEqual(["https://a.test/p", "https://b.test/p"]);
+  });
+
+  test("caps how many pages one pick may fetch", () => {
+    const many = Array.from({ length: 20 }, (_, i) => `https://site${i}.test/p`);
+    expect(candidateUrls(many)).toHaveLength(6);
+  });
+});
+
+describe("harvestImage", () => {
+  const page = (html: string, finalUrl: string) => ({ html, finalUrl });
+  const ogPage = (title: string, image: string, url: string) =>
+    page(`<title>${title}</title><meta property="og:image" content="${image}">`, url);
+
+  test("returns the highest-priority page's image, not whichever resolved first", async () => {
+    const load = async (url: string) =>
+      url === "https://first.test/p"
+        ? ogPage("Dyson V12 Detect Slim review", "https://cdn.first.test/v12.jpg", url)
+        : ogPage("Dyson V12 Detect Slim deal", "https://cdn.second.test/v12.jpg", url);
+    const image = await harvestImage(
+      ["https://first.test/p", "https://second.test/p"],
+      "Dyson V12 Detect Slim",
+      load,
+    );
+    expect(image).toBe("https://cdn.first.test/v12.jpg");
+  });
+
+  test("falls through a bot-blocked retailer to a source that works", async () => {
+    // The real failure mode: retailers 403, sources answer. Previously the
+    // retailer attempts consumed the whole budget and the image was lost.
+    const load = async (url: string) =>
+      url.includes("amazon")
+        ? null
+        : ogPage("Dyson V12 Detect Slim review", "https://cdn.bobvila.test/v12.jpg", url);
+    const image = await harvestImage(
+      ["https://www.amazon.com/dp/B0", "https://bobvila.test/review"],
+      "Dyson V12 Detect Slim",
+      load,
+    );
+    expect(image).toBe("https://cdn.bobvila.test/v12.jpg");
+  });
+
+  test("never takes an image from a page that doesn't name the product", async () => {
+    const load = async (url: string) =>
+      ogPage("The 8 best Dutch ovens we tested", "https://cdn.x.test/dutch-oven.jpg", url);
+    expect(await harvestImage(["https://x.test/roundup"], "Dyson V12 Detect Slim", load)).toBeNull();
+  });
+
+  test("an unnameable product harvests nothing rather than anything", async () => {
+    const load = async (url: string) => ogPage("anything", "https://cdn.x.test/a.jpg", url);
+    expect(await harvestImage(["https://x.test/p"], "", load)).toBeNull();
+  });
+});
+
+describe("pageMatchesProduct — identification, not mention", () => {
+  // Regression (local run 2026-07-28): widening the candidate list gave the
+  // Dyson V12's review photo to the Gen5detect and the V15, because all three
+  // matched the single token "dyson". Same brand is not the same product.
+  const v12Title = `<title>Dyson V12 Detect Slim Review: Tested and Rated</title>`;
+
+  test("a sibling model may not borrow its brandmate's photo", () => {
+    expect(pageMatchesProduct(v12Title, nameTokens("Dyson Gen5detect"))).toBe(false);
+    expect(pageMatchesProduct(v12Title, nameTokens("Dyson V15 Detect"))).toBe(false);
+  });
+
+  test("the product the page is actually about still matches", () => {
+    expect(pageMatchesProduct(v12Title, nameTokens("Dyson V12 Detect Slim"))).toBe(true);
+  });
+
+  test("brand alone never identifies a product", () => {
+    const html = `<title>Samsung vacuums: everything announced this year</title>`;
+    expect(pageMatchesProduct(html, nameTokens("Samsung Bespoke Jet AI"))).toBe(false);
+  });
+
+  test("model-free names need a majority of their words", () => {
+    const tokens = nameTokens("Lodge 6 quart enameled Dutch oven");
+    expect(pageMatchesProduct(`<title>Lodge Enameled Dutch Oven Review</title>`, tokens)).toBe(true);
+    expect(pageMatchesProduct(`<title>The best Dutch ovens of 2026</title>`, tokens)).toBe(false);
   });
 });

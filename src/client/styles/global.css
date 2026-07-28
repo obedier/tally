@@ -71,10 +71,8 @@ a {
   width: 100%;
   max-width: var(--column-max);
   margin: 0 auto;
-  /* The top inset is 0 in a browser tab and the status-bar height in the
-     native shell, where the webview runs full-bleed under the notch. */
-  padding: calc(var(--space-5) + env(safe-area-inset-top, 0px)) var(--gutter)
-    calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
+  padding: calc(var(--space-5) + var(--safe-top)) var(--gutter)
+    calc(var(--space-7) + var(--safe-bottom));
   flex: 1;
 }
 

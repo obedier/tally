@@ -6,7 +6,12 @@
  */
 
 const FETCH_TIMEOUT_MS = 3000;
-const MAX_URLS_PER_PICK = 3;
+/**
+ * Candidate pages tried per pick. Most retail fetches die instantly on a 403,
+ * so a low cap mostly buys refusals; attempts run concurrently and share one
+ * page cache, so raising this costs little and is what actually finds images.
+ */
+const MAX_URLS_PER_PICK = 6;
 /** Realistic UA — some retail pages serve bots an empty shell. */
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
@@ -43,6 +48,44 @@ export function isLikelyGenericImage(url: string): boolean {
   return GENERIC_IMAGE_RE.test(url);
 }
 
+/**
+ * Retailer *search* pages — the shape deepRetailerUrl() produces when a model
+ * gives us a bare homepage. They are correct destinations for a shopper and
+ * worthless here: a results grid has no product og:image, only store branding.
+ * Fetching them burns the time budget before real sources are ever tried.
+ */
+const SEARCH_PATH_RE = /(^\/s$|\/search|catalogsearch|searchpage|\/sch\/|\/browse$)/i;
+const SEARCH_PARAM_KEYS = ["q", "k", "st", "keyword", "searchterm", "query", "_nkw"];
+
+export function isSearchUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (SEARCH_PATH_RE.test(u.pathname)) return true;
+    for (const key of u.searchParams.keys()) {
+      if (SEARCH_PARAM_KEYS.includes(key.toLowerCase())) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pages worth fetching for a pick, in priority order and de-duplicated.
+ * Homepages carry brand furniture; search pages carry nothing.
+ */
+export function candidateUrls(urls: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const url of urls) {
+    if (isRootUrl(url) || isSearchUrl(url) || seen.has(url)) continue;
+    seen.add(url);
+    kept.push(url);
+    if (kept.length >= MAX_URLS_PER_PICK) break;
+  }
+  return kept;
+}
+
 const TOKEN_STOPWORDS = new Set([
   "the", "and", "for", "with", "pro", "max", "plus", "mini", "new", "best",
 ]);
@@ -62,15 +105,29 @@ const TITLE_PATTERNS: readonly RegExp[] = [
 ];
 
 /**
- * A cited page only gets to contribute an image if its own title mentions the
+ * A cited page only gets to contribute an image if its own title identifies the
  * product — otherwise a roundup or unrelated article ships its hero image as
  * "the product" (a live report showed a Dutch oven on a vacuum page this way).
+ *
+ * Identification, not mere mention. A brand name alone names a catalogue: a
+ * "Dyson V12 Detect Slim Review" page matched "Dyson Gen5detect" on the word
+ * "dyson" and handed three different vacuums the same photo. So every token
+ * carrying a model identifier must be present, and a majority of tokens must
+ * match before a page may speak for a product.
  */
 export function pageMatchesProduct(html: string, tokens: readonly string[]): boolean {
   if (tokens.length === 0) return false;
   const titles = TITLE_PATTERNS.map((p) => html.match(p)?.[1] ?? "").join(" ").toLowerCase();
   if (titles.trim() === "") return false;
-  return tokens.some((t) => titles.includes(t));
+
+  const modelTokens = tokens.filter((t) => /\d/.test(t));
+  if (modelTokens.some((t) => !titles.includes(t))) return false;
+
+  const hits = tokens.filter((t) => titles.includes(t)).length;
+  // A confirmed model number is strong evidence on its own; without one, a
+  // single word (almost always the brand) is not enough.
+  const required = Math.max(modelTokens.length > 0 ? 1 : 2, Math.ceil(tokens.length / 2));
+  return hits >= required;
 }
 
 /**
@@ -182,23 +239,35 @@ async function fetchPage(url: string): Promise<{ html: string; finalUrl: string 
   }
 }
 
+type Page = { html: string; finalUrl: string };
+
+/** The image a single already-fetched page may contribute to a named product. */
+function imageFromPage(page: Page, tokens: readonly string[]): string | null {
+  if (!pageMatchesProduct(page.html, tokens)) return null;
+  return (
+    extractJsonLdProductImage(page.html, page.finalUrl) ??
+    extractOgImage(page.html, page.finalUrl)
+  );
+}
+
 /**
- * First trustworthy image across candidate URLs (sequential, capped): the page
- * must mention the product by name, then Product JSON-LD wins over og:image.
+ * First trustworthy image across candidate URLs: the page must mention the
+ * product by name, then Product JSON-LD wins over og:image.
+ *
+ * Fetches run concurrently but the *result* is still the highest-priority URL
+ * that yielded an image — order expresses trust, concurrency only buys time.
  */
 export async function harvestImage(
   allUrls: readonly string[],
   productName: string,
+  load: (url: string) => Promise<Page | null> = fetchPage,
 ): Promise<string | null> {
   const tokens = nameTokens(productName);
-  const urls = allUrls.filter((u) => !isRootUrl(u));
-  for (const url of urls.slice(0, MAX_URLS_PER_PICK)) {
-    const page = await fetchPage(url);
+  if (tokens.length === 0) return null;
+  const pages = await Promise.all(candidateUrls(allUrls).map((url) => load(url)));
+  for (const page of pages) {
     if (page === null) continue;
-    if (!pageMatchesProduct(page.html, tokens)) continue;
-    const image =
-      extractJsonLdProductImage(page.html, page.finalUrl) ??
-      extractOgImage(page.html, page.finalUrl);
+    const image = imageFromPage(page, tokens);
     if (image !== null) return image;
   }
   return null;
@@ -213,6 +282,11 @@ export type ImageTask = {
 /**
  * Resolves images for several picks concurrently under one overall budget.
  * Returns key → imageUrl (null on miss/timeout). Never throws.
+ *
+ * Picks share one page cache: the best fit and its alternatives are usually
+ * cited by overlapping pages, and a roundup review fetched once can name
+ * several of them. Without it, widening the candidate list would multiply
+ * identical requests instead of finding more images.
  */
 export async function harvestImages(
   tasks: readonly ImageTask[],
@@ -220,10 +294,19 @@ export async function harvestImages(
 ): Promise<Record<string, string | null>> {
   const results: Record<string, string | null> = {};
   for (const task of tasks) results[task.key] = null;
+
+  const cache = new Map<string, Promise<Page | null>>();
+  const load = (url: string): Promise<Page | null> => {
+    const cached = cache.get(url);
+    if (cached !== undefined) return cached;
+    const pending = fetchPage(url);
+    cache.set(url, pending);
+    return pending;
+  };
+
   const work = Promise.allSettled(
     tasks.map(async (task) => {
-      const image = await harvestImage(task.urls, task.name);
-      results[task.key] = image;
+      results[task.key] = await harvestImage(task.urls, task.name, load);
     }),
   );
   await Promise.race([work, new Promise((resolve) => setTimeout(resolve, totalBudgetMs))]);

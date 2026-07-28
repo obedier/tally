@@ -264,7 +264,30 @@ export function ResearchPage() {
         {state.hoursSaved ? <TimeSavedChip estimate={state.hoursSaved} /> : null}
       </header>
 
-      {isLive ? (
+      {/* Directly under the progress bar: the one thing worth watching while
+          research runs is which product is currently winning. The decorative
+          objects below only stand in until there is a real answer to show. */}
+      {state.bestFit ? (
+        <section className="research__best fade-in" aria-label="Best fit so far">
+          <div className="research__best-head">
+            <span className="kicker">Best fit so far</span>
+            <span className="micro-copy">Rankings evolve as evidence arrives.</span>
+          </div>
+          <p key={state.bestFit.name} className="display display--title research__best-name">
+            {state.bestFit.name}
+          </p>
+          {state.bestFit.priceDisplay ? (
+            <p className="research__best-price">{state.bestFit.priceDisplay}</p>
+          ) : null}
+          {state.bestFit.note ? <p className="small-copy">{state.bestFit.note}</p> : null}
+          {state.bestFit.backups.length > 0 ? (
+            <p className="micro-copy research__best-backups">
+              Also in the running:{" "}
+              {state.bestFit.backups.map((backup) => backup.name).join(" · ")}
+            </p>
+          ) : null}
+        </section>
+      ) : isLive ? (
         <div className="research__ambient" aria-hidden="true">
           {AMBIENT_IMAGES.map((src) => (
             <img key={src} src={src} alt="" width={88} height={88} loading="lazy" />
@@ -326,28 +349,6 @@ export function ResearchPage() {
             ))}
           </ul>
         </details>
-      ) : null}
-
-      {state.bestFit ? (
-        <section className="research__best fade-in" aria-label="Best fit so far">
-          <div className="research__best-head">
-            <span className="kicker">Best fit so far</span>
-            <span className="micro-copy">Rankings evolve as evidence arrives.</span>
-          </div>
-          <p key={state.bestFit.name} className="display display--title research__best-name">
-            {state.bestFit.name}
-          </p>
-          {state.bestFit.priceDisplay ? (
-            <p className="research__best-price">{state.bestFit.priceDisplay}</p>
-          ) : null}
-          {state.bestFit.note ? <p className="small-copy">{state.bestFit.note}</p> : null}
-          {state.bestFit.backups.length > 0 ? (
-            <p className="micro-copy research__best-backups">
-              Also in the running:{" "}
-              {state.bestFit.backups.map((backup) => backup.name).join(" · ")}
-            </p>
-          ) : null}
-        </section>
       ) : null}
 
       {state.confirmation ? (

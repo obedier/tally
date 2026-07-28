@@ -1,7 +1,9 @@
 /* Home — editorial landing. Hero breathes wide; content stays centered. */
 
 .home {
-  padding-top: var(--space-6);
+  /* Overrides .page's top padding, so it must carry the safe-area inset too —
+     without it the wordmark sits under the status bar in the native shell. */
+  padding-top: calc(var(--space-6) + var(--safe-top));
 }
 
 .home__hero {

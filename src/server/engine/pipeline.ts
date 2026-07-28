@@ -652,8 +652,10 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   });
 
   // 5b. Real product imagery — og:image from pages this research actually
-  // cited (retailer listings first, then sources). Hard 4s budget; a miss
-  // stays null. Never stock, never generated.
+  // cited. Sources first, then retailer listings: the big retailers answer a
+  // server fetch with 403, and the search URLs we link shoppers to are results
+  // grids with no product image, so leading with them spent the whole budget
+  // on refusals. Hard budget; a miss stays null. Never stock, never generated.
   ctx.stage = "product-images";
   const sourceUrlById = new Map(report.sources.map((s) => [s.id, s.url]));
   const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -669,26 +671,36 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       .map((r) => r.url)
       .filter((u): u is string => typeof u === "string" && u.startsWith("http"));
   };
+  // Every cited page is a fallback candidate for every pick: the title gate in
+  // harvestImage refuses any page that doesn't name that product, so breadth
+  // costs nothing in correctness and is what gets alternatives a picture.
+  const allSourceUrls = report.sources.map((s) => s.url);
+  const sourceUrlsFor = (ids: readonly string[]): string[] =>
+    ids.map((id) => sourceUrlById.get(id)).filter((u): u is string => u !== undefined);
   const imageTasks: ImageTask[] = [
     {
       key: "bestFit",
       name: report.bestFit.name,
       urls: [
-        ...report.retailers.map((r) => r.url).filter((u): u is string => u !== null),
+        ...sourceUrlsFor(report.bestFit.sourceIds),
         ...citedRetailerUrls(report.bestFit.name),
-        ...report.bestFit.sourceIds
-          .map((id) => sourceUrlById.get(id))
-          .filter((u): u is string => u !== undefined),
+        ...report.retailers.map((r) => r.url).filter((u): u is string => u !== null),
+        ...allSourceUrls,
       ],
     },
-    ...report.alternatives
-      .slice(0, 4)
-      .map((alt) => ({ key: `alt-${alt.rank}`, name: alt.name, urls: citedRetailerUrls(alt.name) })),
+    ...report.alternatives.slice(0, 4).map((alt) => ({
+      key: `alt-${alt.rank}`,
+      name: alt.name,
+      urls: [...citedRetailerUrls(alt.name), ...allSourceUrls],
+    })),
   ].filter((task) => task.urls.length > 0);
   let finalReport = report;
   if (imageTasks.length > 0) {
     emit({ type: "stage", stage: "product-images", status: "started", elapsedMs: elapsed(), detail: "from cited pages" });
-    const images = await harvestImages(imageTasks, 4000);
+    // Attempts now run concurrently, so wall clock is roughly one fetch
+    // timeout rather than the sum — 5s leaves room for parse without letting a
+    // slow page hold up a report that is otherwise finished.
+    const images = await harvestImages(imageTasks, 5000);
     const withImages = {
       ...report,
       bestFit: { ...report.bestFit, imageUrl: images["bestFit"] ?? null },
