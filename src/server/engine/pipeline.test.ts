@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveAssumptions } from "./pipeline";
 import type { AssembleInput } from "./sanitize";
-import { assembleReport, dedupeDisagreements, deepRetailerUrl, parsePrice, safeUrl, SanitizeError } from "./sanitize";
+import { assembleReport, dedupeDisagreements, deepRetailerUrl, enforceSourceDiversity, GAP_VOCABULARY, parsePrice, safeUrl, SanitizeError } from "./sanitize";
 import { classifySource, domainFromChunk, type RawChunk } from "./sources";
 
 /** Unit tests for the pure sanitize/assemble step. No network. */
@@ -450,5 +450,44 @@ describe("safeUrl independence", () => {
       "https://www.costco.com/dyson-v12.product.html",
     );
     expect(safeUrl("javascript:alert(1)")).toBeNull();
+  });
+});
+
+/**
+ * Regression (eval gate 2026-07-28, ce-sku-01): the sanitizer's gap detector was
+ * looser than the downstream S5 check, so a vague model hedge ("a lack of expert
+ * reviews limits a comprehensive assessment") suppressed the quantified sentence
+ * and the reader never learned the evidence was 3 sources in 1 class. The
+ * guarantee under test: whenever confidence is capped for thin evidence, the
+ * reason names the shortfall in recognizable terms.
+ */
+describe("enforceSourceDiversity", () => {
+  const verdict = (confidenceReason: string) =>
+    ({ confidence: "high", confidenceReason } as unknown as Parameters<typeof enforceSourceDiversity>[0]);
+
+  it("appends the quantified gap when the model only hedges vaguely", () => {
+    const out = enforceSourceDiversity(
+      verdict("Evidence strongly supports owner satisfaction. However, a lack of expert reviews limits a comprehensive market assessment."),
+      3,
+      ["retailer"] as never,
+    );
+    expect(out.confidence).toBe("medium");
+    expect(out.confidenceReason).toContain("3 sources across 1 source class");
+    expect(GAP_VOCABULARY.test(out.confidenceReason)).toBe(true);
+  });
+
+  it("leaves an already-explicit reason alone", () => {
+    const reason = "Only 4 sources across 2 source classes were available, so this is not conclusive.";
+    const out = enforceSourceDiversity(verdict(reason), 4, ["retailer", "review"] as never);
+    expect(out.confidenceReason).toBe(reason);
+  });
+
+  it("does not touch a report with healthy diversity", () => {
+    const out = enforceSourceDiversity(
+      verdict("Broad agreement across independent testing outlets."),
+      12,
+      ["retailer", "review", "forum"] as never,
+    );
+    expect(out.confidence).toBe("high");
   });
 });

@@ -376,16 +376,28 @@ function buildRetailers(
     .slice(0, 12);
 }
 
+/**
+ * The vocabulary a reader (and the S5 eval check) recognizes as naming an
+ * evidence shortfall. Exported so the guarantee is testable: whenever
+ * confidence is capped for thin evidence, the reason MUST match this.
+ */
+export const GAP_VOCABULARY = /\b(sources?|class(?:es)?|divers\w*|limited|only|single|few)\b/i;
+
+/**
+ * Only trust the model's own wording when it names the shortfall in terms a
+ * reader would recognize. A hedge like "a lack of expert reviews limits a
+ * comprehensive assessment" reads as vague and never tells the reader HOW thin
+ * the evidence was — it earns the explicit quantified sentence instead.
+ */
 const reasonStatesGap = (reason: string): boolean =>
-  /(only|few|limited|single|narrow|lack|weak|insufficient|fewer|small|thin)/i.test(reason) &&
-  /(sourc|class|diversit|evidence|coverage)/i.test(reason);
+  GAP_VOCABULARY.test(reason) && /(sourc|class|diversit|evidence|coverage)/i.test(reason);
 
 /**
  * S5 honesty rule: fewer than 8 sources or fewer than 3 distinct source
  * classes caps confidence at "medium" and forces the confidenceReason to
  * state the gap explicitly (appending a sentence if the model didn't).
  */
-function enforceSourceDiversity(
+export function enforceSourceDiversity(
   verdict: Verdict,
   sourceCount: number,
   classes: readonly SourceClass[],
