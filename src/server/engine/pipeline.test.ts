@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveAssumptions } from "./pipeline";
 import type { AssembleInput } from "./sanitize";
-import { assembleReport, dedupeDisagreements, parsePrice, SanitizeError } from "./sanitize";
+import { assembleReport, dedupeDisagreements, parsePrice, safeUrl, SanitizeError } from "./sanitize";
 import { classifySource, domainFromChunk, type RawChunk } from "./sources";
 
 /** Unit tests for the pure sanitize/assemble step. No network. */
@@ -397,5 +397,27 @@ describe("dedupeDisagreements", () => {
       "Price conflict between retailers.",
       "Battery life claims differ across reviews.",
     ]);
+  });
+});
+
+// Regression (live prod report 2026-07-27): evidence delivered geni.us — an
+// affiliate link shortener — as Amazon's retailer URL. Independence means no
+// monetized links, ever.
+describe("safeUrl independence", () => {
+  it("drops affiliate shorteners outright", () => {
+    expect(safeUrl("https://geni.us/Gx1nCkn")).toBeNull();
+    expect(safeUrl("https://amzn.to/3xYz")).toBeNull();
+    expect(safeUrl("https://www.shareasale.com/r.cfm?b=1")).toBeNull();
+  });
+  it("strips amazon affiliate tags but keeps the direct link", () => {
+    expect(safeUrl("https://www.amazon.com/dp/B0ABC?tag=somebody-20&th=1")).toBe(
+      "https://www.amazon.com/dp/B0ABC?th=1",
+    );
+  });
+  it("keeps clean retailer links and rejects non-http", () => {
+    expect(safeUrl("https://www.costco.com/dyson-v12.product.html")).toBe(
+      "https://www.costco.com/dyson-v12.product.html",
+    );
+    expect(safeUrl("javascript:alert(1)")).toBeNull();
   });
 });

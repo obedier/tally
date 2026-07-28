@@ -130,12 +130,44 @@ const hasPriceEvidence = (r: Rec): boolean =>
 const priceFrom = (r: Rec): PriceRange =>
   parsePrice({ min: r.priceMin, max: r.priceMax, display: r.priceDisplay, currency: r.currency });
 
-const safeUrl = (v: unknown): string | null => {
+/**
+ * Independence rule (CLAUDE.md non-negotiable #1): Tally must never route a
+ * purchase through anyone's monetized link. Evidence sometimes carries
+ * affiliate shorteners as "retailer" URLs (a live report shipped geni.us as
+ * Amazon); those domains are dropped outright, and Amazon affiliate tags are
+ * stripped from otherwise-direct links.
+ */
+const AFFILIATE_HOSTS = new Set([
+  "geni.us",
+  "amzn.to",
+  "bit.ly",
+  "tinyurl.com",
+  "shareasale.com",
+  "click.linksynergy.com",
+  "go.linkby.com",
+  "go.skimresources.com",
+  "howl.me",
+  "rstyle.me",
+  "shop-links.co",
+  "prf.hn",
+  "avantlink.com",
+  "t.co",
+  "shopstyle.it",
+]);
+
+export const safeUrl = (v: unknown): string | null => {
   const s = str(v);
   if (s === null) return null;
   try {
     const u = new URL(s);
-    return u.protocol === "http:" || u.protocol === "https:" ? s : null;
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    if (AFFILIATE_HOSTS.has(host)) return null;
+    if (/(^|\.)amazon\./.test(host) && u.searchParams.has("tag")) {
+      u.searchParams.delete("tag");
+      return u.toString();
+    }
+    return s;
   } catch {
     return null;
   }
