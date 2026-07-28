@@ -10,15 +10,15 @@ import "./home.css";
 const CTA_ENTRIES = ["share-cta", "poll"] as const;
 type CtaEntry = (typeof CTA_ENTRIES)[number];
 
-const EXAMPLES: ReadonlyArray<{ label: string; query: string }> = [
-  { label: "Try Dyson V12 Detect", query: "Dyson V12 Detect" },
-  { label: "Try best vacuum for pet hair", query: "best vacuum for pet hair" },
-];
-
-/** Home mode choice: Quick / Full research. Deep dive is offered post-report, not here. */
+/**
+ * Home mode choice: Quick / Full research. Deep dive is offered post-report.
+ * The timing lives in the accessible name rather than on the chip — the switch
+ * sits above the search field, where width is the scarce resource, and the
+ * research screen states the real estimate once a run is under way.
+ */
 const MODES: ReadonlyArray<{ id: ResearchMode; label: string; hint: string }> = [
-  { id: "quick", label: "Quick", hint: "~30 seconds" },
-  { id: "full", label: "Full research", hint: "a few minutes" },
+  { id: "quick", label: "Quick", hint: "about 30 seconds" },
+  { id: "full", label: "Full", hint: "a few minutes" },
 ];
 
 export function HomePage() {
@@ -36,7 +36,7 @@ export function HomePage() {
   const [locationOpen, setLocationOpen] = useState(false);
   const [locationDraft, setLocationDraft] = useState("");
 
-  const startResearch = (query: string, entry: "home-search" | "example-chip") => {
+  const startResearch = (query: string, entry: "home-search") => {
     const trimmed = query.trim();
     if (!trimmed) return;
     // A CTA arrival attributes the conversion to that source, not the local action.
@@ -62,6 +62,23 @@ export function HomePage() {
         </h1>
 
         <form className="home__search-form" onSubmit={onSubmit}>
+          <div className="home__modes" role="radiogroup" aria-label="Research depth">
+            {MODES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={mode === option.id}
+                aria-label={`${option.label} research — ${option.hint}`}
+                title={`${option.label} research — ${option.hint}`}
+                className={`home__mode${mode === option.id ? " home__mode--on" : ""}`}
+                onClick={() => setMode(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
           <div className="home__search">
             <Spyglass className="home__search-glass" />
             <input
@@ -81,21 +98,6 @@ export function HomePage() {
             >
               <span aria-hidden="true">→</span>
             </button>
-          </div>
-
-          <div className="home__modes" role="radiogroup" aria-label="Research depth">
-            {MODES.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                role="radio"
-                aria-checked={mode === option.id}
-                className={`home__mode${mode === option.id ? " home__mode--on" : ""}`}
-                onClick={() => setMode(option.id)}
-              >
-                {option.label} <small>{option.hint}</small>
-              </button>
-            ))}
           </div>
 
           {locationOpen ? (
@@ -124,17 +126,6 @@ export function HomePage() {
             </button>
           )}
         </form>
-
-        <p className="home__examples">
-          {EXAMPLES.map((example, index) => (
-            <span key={example.query}>
-              {index > 0 ? <b aria-hidden="true">•</b> : null}
-              <button type="button" onClick={() => startResearch(example.query, "example-chip")}>
-                {example.label}
-              </button>
-            </span>
-          ))}
-        </p>
       </section>
 
       <div className="home__objects" aria-hidden="true">
@@ -143,7 +134,7 @@ export function HomePage() {
         <img src="/product-images/linen-bedding.png" alt="" width="220" height="270" loading="lazy" />
       </div>
 
-      <RecentResearch limit={10} />
+      <RecentResearch limit={2} expandedLimit={10} />
     </main>
   );
 }
