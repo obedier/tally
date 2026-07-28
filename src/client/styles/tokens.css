@@ -33,6 +33,9 @@
   --text-base: 0.9375rem;
   --text-small: 0.8125rem;
   --text-micro: 0.6875rem;
+  /* Text fields never go below 16px: iOS zooms the page when a focused
+     input is smaller, and the base scale is 15px. Body copy is unaffected. */
+  --text-field: max(16px, var(--text-base));
 
   --tracking-display: -0.045em;
   --tracking-kicker: 0.09em;

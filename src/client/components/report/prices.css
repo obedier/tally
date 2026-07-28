@@ -54,7 +54,7 @@
   border-radius: var(--radius-xs);
   background: var(--color-surface, transparent);
   color: var(--color-text);
-  font-size: var(--text-base);
+  font-size: var(--text-field);
 }
 
 .prices__location-input:focus {

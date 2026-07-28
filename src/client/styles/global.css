@@ -46,9 +46,17 @@ button {
   cursor: pointer;
 }
 
-input {
+input,
+textarea,
+select {
   font: inherit;
   color: inherit;
+  /* iOS zooms the whole page when a focused field is under 16px, and the type
+     scale's base is 15px — so every field in the app zoomed on tap, and the
+     page stayed zoomed after blur. Fields render at 16px minimum; body copy
+     keeps its scale. The alternative fix (maximum-scale=1 on the viewport)
+     would kill pinch-zoom for everyone, which is not a trade worth making. */
+  font-size: max(16px, 1em);
 }
 
 a {

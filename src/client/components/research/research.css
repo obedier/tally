@@ -344,7 +344,7 @@
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-sm);
   background: var(--color-card);
-  font-size: var(--text-base);
+  font-size: var(--text-field);
   color: var(--color-ink);
 }
 
