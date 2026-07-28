@@ -23,7 +23,21 @@ const OG_PATTERNS: readonly RegExp[] = [
  * they'd read as the product. Reject anything that looks like brand furniture.
  */
 const GENERIC_IMAGE_RE =
-  /logo|brandmark|favicon|wordmark|sprite|placeholder|og[-_]?default|default[-_]?og|social[-_]?(default|share|card)|site[-_]?icon|banner[-_]?generic/i;
+  /logo|brandmark|favicon|wordmark|sprite|placeholder|og[-_]?default|default[-_]?og|social[-_]?(default|share|card)|site[-_]?icon|banner[-_]?generic|walmartimages\.com\/dfw\/|ebaystatic\.com/i;
+
+/**
+ * A retailer HOMEPAGE's og:image is its brand image, never the product (a live
+ * report shipped the Walmart logo this way) — only pages with a real path can
+ * be product/article pages worth fetching.
+ */
+export function isRootUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.pathname === "/" || u.pathname === "";
+  } catch {
+    return true;
+  }
+}
 
 export function isLikelyGenericImage(url: string): boolean {
   return GENERIC_IMAGE_RE.test(url);
@@ -70,7 +84,8 @@ async function fetchPage(url: string): Promise<{ html: string; finalUrl: string 
 }
 
 /** First image found across candidate URLs (sequential, capped). */
-export async function harvestImage(urls: readonly string[]): Promise<string | null> {
+export async function harvestImage(allUrls: readonly string[]): Promise<string | null> {
+  const urls = allUrls.filter((u) => !isRootUrl(u));
   for (const url of urls.slice(0, MAX_URLS_PER_PICK)) {
     const page = await fetchPage(url);
     if (page === null) continue;

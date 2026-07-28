@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { extractOgImage, isLikelyGenericImage } from "./images";
+import { extractOgImage, isLikelyGenericImage, isRootUrl } from "./images";
 
 describe("extractOgImage", () => {
   test("pulls og:image and resolves relative URLs", () => {
@@ -41,5 +41,21 @@ describe("isLikelyGenericImage", () => {
     expect(isLikelyGenericImage("https://x.com/assets/site-logo.png")).toBe(true);
     expect(isLikelyGenericImage("https://x.com/og-default.jpg")).toBe(true);
     expect(isLikelyGenericImage("https://m.media-amazon.com/images/I/61abc.jpg")).toBe(false);
+  });
+
+  // Regression (live prod 2026-07-28): Walmart's homepage og:image (their
+  // /dfw/ marketing CDN path) shipped as the "product image".
+  test("flags retailer marketing-CDN generics", () => {
+    expect(isLikelyGenericImage("https://i5.walmartimages.com/dfw/63fd9f59-49ff/k2.v1.png")).toBe(true);
+    expect(isLikelyGenericImage("https://i5.walmartimages.com/asr/real-product.jpg")).toBe(false);
+  });
+});
+
+describe("isRootUrl", () => {
+  test("homepages are never product pages", () => {
+    expect(isRootUrl("https://www.walmart.com")).toBe(true);
+    expect(isRootUrl("https://www.walmart.com/")).toBe(true);
+    expect(isRootUrl("https://www.walmart.com/ip/dyson-v12/123")).toBe(false);
+    expect(isRootUrl("not a url")).toBe(true);
   });
 });

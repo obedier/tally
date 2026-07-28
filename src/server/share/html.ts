@@ -293,7 +293,7 @@ export function buildShareHtml(report: Report, origin: string): string {
       a.priceRange ? esc(a.priceRange.display) : "Check retailer"
     }</span></li>`;
   const altsHtml = primaryAlt
-    ? `<h2 class="section">A different priority?</h2>${renderAlternative(primaryAlt)}${
+    ? `<h2 class="section">A different priority?</h2><ol class="alts">${renderAlternative(primaryAlt)}</ol>${
         otherAlts.length
           ? `<details class="more-alts"><summary>${otherAlts.length} more option${
               otherAlts.length === 1 ? "" : "s"
