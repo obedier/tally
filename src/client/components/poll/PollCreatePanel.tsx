@@ -112,14 +112,13 @@ export function PollCreatePanel({ report }: { report: Report }) {
   }
 
   return (
-    <section className="poll-create" aria-labelledby="poll-create-heading">
+    <section className="poll-create" id="poll" aria-labelledby="poll-create-heading">
       <p className="kicker">Decide with friends</p>
       <h2 id="poll-create-heading" className="serif-note poll-create__framing">
         Can&rsquo;t decide? Let your people weigh in.
       </h2>
       <p className="small-copy poll-create__intro">
-        Turn this shortlist into a poll your friends can vote on — no account
-        needed. They&rsquo;ll see the research behind each pick, not just the names.
+        Friends vote on your shortlist — no account needed.
       </p>
 
       <label className="micro-copy poll-create__label" htmlFor="poll-question">
@@ -135,9 +134,7 @@ export function PollCreatePanel({ report }: { report: Report }) {
       />
 
       <fieldset className="poll-create__options">
-        <legend className="micro-copy poll-create__label">
-          Finalists ({selectedCount} selected · pick 2–{MAX_OPTIONS})
-        </legend>
+        <legend className="micro-copy poll-create__label">Pick 2–{MAX_OPTIONS}</legend>
         {candidates.map((candidate) => {
           const checked = selected.has(candidate.key);
           return (
@@ -156,9 +153,6 @@ export function PollCreatePanel({ report }: { report: Report }) {
                   {candidate.rank === 1 ? "Best fit · " : `#${candidate.rank} · `}
                   {candidate.label}
                 </span>
-                {candidate.note ? (
-                  <span className="micro-copy poll-create-option__note">{candidate.note}</span>
-                ) : null}
               </span>
             </label>
           );

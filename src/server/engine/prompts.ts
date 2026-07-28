@@ -87,7 +87,7 @@ Rules:
    * notes to the JSON contract. The version covers the pair.
    */
   evidence: {
-    version: "2.0.0",
+    version: "2.1.0",
     build: ({ query, categoryLabel, criteria, assumptions, questions, location, locationKnown, concise }: EvidencePromptArgs): string => `${PERSONA}
 
 Research task for the query: "${query}" (category: ${categoryLabel}).
@@ -109,7 +109,7 @@ Write your findings as plain-text research notes with exactly these sections:
 
 FINDINGS — one short paragraph per question, each starting with its id in brackets (e.g. [${questions[0]?.id ?? "q1"}]), summarizing what current sources actually show.
 
-CANDIDATES — the products in contention, best-first for this user's assumptions. For each: its name, then ONLY facts the sources state — price range in USD, average rating out of 5 (convert 10-point scales), what reviews agree on, retailer names and URLs that appeared in the evidence, whether it is discontinued or has a direct successor, and one honest note.
+CANDIDATES — the products in contention, best-first for this user's assumptions. For each: its name, then ONLY facts the sources state — price range in USD, average rating out of 5 (convert 10-point scales), what reviews agree on, retailer names and URLs that appeared in the evidence, whether it is discontinued or has a direct successor, and one honest note. Actively look up each candidate's average customer rating (retailer or review-site aggregate) — including the queried product itself — and report it whenever any source shows one.
 
 DISAGREEMENTS — concrete conflicts between sources, and anything that looks stale or outdated.
 

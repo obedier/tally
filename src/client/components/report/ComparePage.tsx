@@ -88,14 +88,21 @@ function Comparison({ report }: { report: Report }) {
     track({ name: "comparison_used", reportId: report.id, alternativesShown: alternatives.length });
   }, [report.id, alternatives.length]);
 
+  // "Poll your friends" on the report links here with #poll — honor the hash
+  // once the data (and thus the panel) has rendered.
+  useEffect(() => {
+    if (window.location.hash === "#poll") {
+      document.getElementById("poll")?.scrollIntoView({ block: "start" });
+    }
+  }, [report.id]);
+
   return (
     <main className="page">
       <PageTop back={{ to: `/report/${report.id}`, label: "Report" }} />
       <p className="kicker">Comparison</p>
       <h1 className="display display--headline">{report.query}</h1>
       <p className="small-copy compare__intro">
-        The best fit vs the {alternatives.length} strongest alternatives, ranked
-        for your assumptions.
+        Best fit vs the {alternatives.length} strongest alternatives.
       </p>
 
       <div className="compare__view" role="radiogroup" aria-label="Comparison layout">
@@ -132,7 +139,7 @@ function Comparison({ report }: { report: Report }) {
                   <td>#{row.rank}</td>
                   <th scope="row">{row.name}</th>
                   <td>{row.priceDisplay ?? "—"}</td>
-                  <td>{row.ratingValue !== null ? `${row.ratingValue} / 5` : "No verified rating"}</td>
+                  <td>{row.ratingValue !== null ? `${row.ratingValue} / 5` : "—"}</td>
                   <td>{row.pros[0] ?? "—"}</td>
                   <td>{row.cons[0] ?? "—"}</td>
                 </tr>
@@ -251,10 +258,8 @@ function CompareCard({
       <div className="compare-card__meta">
         {priceDisplay ? <span className="compare-card__price">{priceDisplay}</span> : null}
         {ratingValue !== null ? (
-          <span className="compare-card__rating">{ratingValue} / 5</span>
-        ) : (
-          <span className="compare-card__rating compare-card__rating--none">No verified rating</span>
-        )}
+          <span className="compare-card__rating">★ {ratingValue} / 5</span>
+        ) : null}
       </div>
 
       <p className="small-copy compare-card__tradeoff">{tradeoff}</p>

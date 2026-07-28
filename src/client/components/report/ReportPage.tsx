@@ -80,6 +80,14 @@ function ReportSummary({ report }: { report: Report }) {
         <p className="micro-copy report__query">{report.query}</p>
         <h1 className="display display--headline">{verdict.headline}</h1>
         <p className="body-copy report__rationale">{verdict.rationale}</p>
+        <div className="report__verdict-actions">
+          <ShareButton reportId={report.id} surface="report" />
+          {report.alternatives.length > 0 ? (
+            <Link className="report__verdict-action" to={`/report/${report.id}/compare#poll`}>
+              Poll your friends
+            </Link>
+          ) : null}
+        </div>
         <BlockMark />
       </header>
 
@@ -115,10 +123,14 @@ function ReportSummary({ report }: { report: Report }) {
         ) : null}
         <h2 className="display display--title">{bestFit.name}</h2>
         {bestFit.rating ? (
-          <p className="small-copy report__rating">
+          <p className="micro-copy report__rating">
             {bestFit.rating.value !== null ? (
-              <strong>{bestFit.rating.value} / {bestFit.rating.outOf}</strong>
-            ) : null}{" "}
+              <strong>
+                ★ {bestFit.rating.value} / {bestFit.rating.outOf}
+              </strong>
+            ) : (
+              <span className="report__rating-label">Reviews</span>
+            )}{" "}
             {bestFit.rating.summary}
           </p>
         ) : null}
@@ -168,8 +180,10 @@ function ReportSummary({ report }: { report: Report }) {
       ) : null}
 
       {report.meta.disagreements.length > 0 ? (
-        <section className="report__disagreements" aria-label="Where sources disagree">
-          <h2 className="kicker">Where sources disagree</h2>
+        <details className="report__disagreements">
+          <summary className="kicker report__disagreements-summary">
+            Where sources disagree · {report.meta.disagreements.length}
+          </summary>
           <ul>
             {report.meta.disagreements.map((item) => (
               <li key={item} className="small-copy">
@@ -177,7 +191,7 @@ function ReportSummary({ report }: { report: Report }) {
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : null}
 
       <nav className="report__links" aria-label="Report sections">
@@ -196,14 +210,9 @@ function ReportSummary({ report }: { report: Report }) {
           Sources · {report.sources.length} <span aria-hidden="true">↗</span>
         </button>
         {report.meta.mode !== "deep" ? (
-          <>
-            <button type="button" className="report__link" onClick={startDeepDive}>
-              Go deeper on this <span aria-hidden="true">→</span>
-            </button>
-            <p className="micro-copy">
-              Deep dive: Tally keeps researching until the evidence is conclusive.
-            </p>
-          </>
+          <button type="button" className="report__link" onClick={startDeepDive}>
+            Deep dive — research until conclusive <span aria-hidden="true">→</span>
+          </button>
         ) : null}
       </nav>
 
@@ -217,7 +226,6 @@ function ReportSummary({ report }: { report: Report }) {
 
       <div className="report__share-row">
         <ShareButton reportId={report.id} surface="report" />
-        <p className="micro-copy report__share-note">Good enough to send to a friend.</p>
       </div>
 
       <FeedbackButtons reportId={report.id} />
@@ -309,7 +317,7 @@ function AssumptionsEditor({
     <section className="report__assumptions" aria-label="What we assumed">
       <h2 className="kicker">What we assumed</h2>
       <p className="micro-copy report__assumptions-lead">
-        Reword or dismiss any of these, then re-run — your changes steer a fresh research pass.
+        Wrong? Edit any of these and re-run.
       </p>
       <ul className="report__assumption-edit-list">
         {drafts.map((draft) => (

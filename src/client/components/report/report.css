@@ -85,6 +85,43 @@
   color: var(--color-green);
 }
 
+.report__rating {
+  color: var(--color-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.report__rating-label {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+/* Share + poll within reach of the verdict — present, never nagging. */
+.report__verdict-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.report__verdict-actions .report__share {
+  margin: 0;
+  padding: 0.45rem 0.9rem;
+  font-size: var(--text-small);
+}
+
+.report__verdict-action {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .report__why-best {
   max-width: 52ch;
 }
@@ -135,6 +172,29 @@
 .report__disagreements ul {
   margin: var(--space-2) 0 0;
   padding-left: 1.1rem;
+}
+
+.report__disagreements-summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.report__disagreements-summary::-webkit-details-marker {
+  display: none;
+}
+
+.report__disagreements-summary::after {
+  content: " +";
+  color: var(--color-muted);
+}
+
+.report__disagreements[open] .report__disagreements-summary::after {
+  content: " −";
+}
+
+.report__disagreements-summary:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 2px;
 }
 
 /* Section links */
@@ -480,9 +540,6 @@
   transform: translateY(0);
 }
 
-.report__share-note {
-  color: var(--color-muted);
-}
 
 .report__attribution {
   margin-top: var(--space-5);
