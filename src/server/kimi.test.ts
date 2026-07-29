@@ -229,6 +229,57 @@ describe("streaming", () => {
   });
 });
 
+describe("per-model reasoning rules are learned, not hardcoded", () => {
+  const reasoningRejection = (): Response =>
+    new Response(
+      JSON.stringify({ error: { message: "invalid thinking: only type=enabled is allowed for this model", type: "invalid_request_error" } }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+
+  it("classifies the reasoning rejection as retryable rather than a dead 400", () => {
+    const err = classifyKimiStatus(400, "invalid_request_error", "invalid thinking: only type=enabled is allowed for this model");
+    expect(err.code).toBe("reasoning-required");
+    expect(err.retryable).toBe(true);
+  });
+
+  it("still treats an ordinary 400 as permanent", () => {
+    expect(classifyKimiStatus(400, undefined, "something else entirely").retryable).toBe(false);
+  });
+
+  it("retries with reasoning enabled when the model refuses to disable it", async () => {
+    // k2.7 is reasoning-only; k2.6 is not. Hardcoding either would break on the
+    // next Moonshot release, so the constraint is read off the rejection.
+    let call = 0;
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      call += 1;
+      return Promise.resolve(call === 1 ? reasoningRejection() : completion("ok", "stop"));
+    });
+    const res = await callKimi(
+      { apiKey: "k", model: "kimi-reasoning-only-test", prompt: "p", reasoningEffort: "none" },
+      (t) => t,
+    );
+    expect(res.data).toBe("ok");
+    const retried = bodyOf(spy.mock.calls[1] as unknown[]);
+    expect(retried.reasoning_effort).not.toBe("none");
+    // Temperature must move with it, or the retry trades one 400 for another.
+    expect(retried.temperature).toBe(1);
+  });
+
+  it("remembers the constraint so later calls skip the failed round trip", async () => {
+    const model = "kimi-remembered-test";
+    let call = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      call += 1;
+      return Promise.resolve(call === 1 ? reasoningRejection() : completion("ok", "stop"));
+    });
+    await callKimi({ apiKey: "k", model, prompt: "p", reasoningEffort: "none" }, (t) => t);
+    const callsAfterFirst = call;
+    await callKimi({ apiKey: "k", model, prompt: "p", reasoningEffort: "none" }, (t) => t);
+    // The second request must cost exactly one call, not a rejection plus retry.
+    expect(call - callsAfterFirst).toBe(1);
+  });
+});
+
 describe("parseKimiSources", () => {
   it("extracts the direct publisher URLs that are Kimi's whole advantage", () => {
     const out = parseKimiSources(

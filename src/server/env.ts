@@ -44,7 +44,26 @@ export type ResearchProviderId = "kimi" | "gemini";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const DEFAULT_FAST_MODEL = "gemini-2.5-flash-lite";
-const DEFAULT_KIMI_MODEL = "kimi-k2.6";
+/**
+ * k2.7-code-highspeed, not k2.6, and measured rather than assumed: on the real
+ * grounded evidence prompt it returned the same sections and comparable
+ * citations in 30.6s against k2.6's 393.6s (12.9x), taking an end-to-end quick
+ * research from 442s to 74s. It also stopped the mid-answer drift into Chinese
+ * that k2.6 exhibited. The "code" in the name is misleading for our use — the
+ * grounded research and JSON stages are exactly what it is good at.
+ *
+ * Not kimi-k3: it emits a `$web_search` tool call and then rejects that same
+ * call echoed back verbatim ("Invalid request: tokenization failed"), so it
+ * cannot complete a grounded search loop at all. Verified against five
+ * different echo shapes, streaming and not — it is a k3-side limitation, not
+ * ours. k3 works fine for ungrounded JSON, which is not where the time goes.
+ *
+ * Reasoning is NOT optional on this family (the API answers "only type=enabled
+ * is allowed"); the client detects that from the rejection and adapts, so
+ * changing this value to a model with different rules does not need a code
+ * change.
+ */
+const DEFAULT_KIMI_MODEL = "kimi-k2.7-code-highspeed";
 /**
  * Gemini is primary by default — for LATENCY only. Kimi-only research now WORKS
  * end to end and is one env var away:

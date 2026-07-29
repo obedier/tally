@@ -100,9 +100,32 @@ control adjacent to an open control at under 44pt is a real misfire risk.
 
 ---
 
+### 12. Judge Kimi's source QUALITY before considering it as the default
+**What:** Compare Kimi vs Gemini source sets on the 12 golden eval queries —
+count, domain authority, and how often a citation is an SEO content farm.
+**Why:** This, not speed, is now the blocker (D-051). Two Kimi-only runs
+returned 3 and 7 sources against Gemini's 22, and one cited
+`texasdiamondgarage.com`, `qwertycompare.com` and `thirstybear.com` for vacuum
+research where Gemini surfaced rtings/CNET-class sources. Kimi's URLs are
+*direct* (the advantage that would fix image harvesting) but currently *thinner
+and lower-authority* (the cost). **Trust outranks speed**, so a faster engine
+that cites content farms is a downgrade, not an upgrade.
+**Pros:** Turns a subjective impression into the measurement that should decide
+the default engine.
+**Cons:** Needs the eval harness run twice (~2 × 12 cases).
+**Possible fixes if it confirms:** bias the evidence prompt toward named
+authoritative outlets; post-filter citations by domain class (`sources.ts`
+already classifies them); or keep Gemini for evidence and use Kimi only where
+its direct URLs help.
+**Context:** D-050, D-051. **Effort:** M · **Priority:** P2 — P1 the moment
+anyone proposes flipping the default
+
 ### 11. Cut Kimi's evidence latency so it can become the default engine
-**What:** Reduce the grounded evidence call from ~394s. It is 89% of a 442s
-Kimi-only research and the ONLY thing keeping Gemini as the default.
+**Status (2026-07-29):** largely SOLVED by D-051 — switching the default Kimi
+model to `kimi-k2.7-code-highspeed` cut a quick research from 442s to 74s
+(evidence 393.6s → 38.4s). A second query measured 130s. Remaining work below
+is only worth doing if Kimi becomes the default; item 12 gates that.
+**What:** Reduce the grounded evidence call further if needed.
 **Why:** Kimi-only research now works correctly end to end (D-050) and cites
 **direct publisher URLs** where Gemini returns `vertexaisearch` redirect
 wrappers — the root cause of the 24% image-harvest rate and weak source links —

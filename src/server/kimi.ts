@@ -69,7 +69,8 @@ export type KimiErrorCode =
   | "network"
   | "timeout"
   | "parse"
-  | "truncated";
+  | "truncated"
+  | "reasoning-required";
 
 export class KimiError extends Error {
   constructor(
@@ -187,12 +188,17 @@ async function streamChat(url: string, init: RequestInit, signal: AbortSignal): 
   const res = await fetch(url, { ...init, signal });
   if (!res.ok) {
     let type: string | undefined;
+    let message: string | undefined;
     try {
-      type = ((await res.json()) as GroundedResponse).error?.type;
+      const err = ((await res.json()) as GroundedResponse).error;
+      type = err?.type;
+      // An API validation message ("only type=enabled is allowed for this
+      // model") — never request content, so safe to inspect and log.
+      message = err?.message;
     } catch {
       /* non-JSON error body: the status alone classifies it */
     }
-    throw classifyKimiStatus(res.status, type);
+    throw classifyKimiStatus(res.status, type, message);
   }
   if (res.body === null) throw new KimiError("parse", "Kimi returned no response body", true);
 
@@ -260,7 +266,30 @@ async function streamChat(url: string, init: RequestInit, signal: AbortSignal): 
  * retrying, a suspended/unfunded account never is, and retrying it just burns
  * the caller's time budget on a guaranteed failure.
  */
-export function classifyKimiStatus(status: number, bodyType: string | undefined): KimiError {
+/**
+ * Models disagree about reasoning, and the API states its rules precisely:
+ * k2.6/k3 accept `reasoning_effort: "none"` (temperature 0.6), while the k2.7
+ * family is reasoning-only and answers "invalid thinking: only type=enabled is
+ * allowed for this model" (temperature 1). Rather than hardcode a model list
+ * that goes stale with every Moonshot release, we read the constraint off the
+ * rejection and remember it for the rest of the process.
+ */
+const forcedEffort = new Map<string, ReasoningEffort>();
+
+/** True when the upstream 400 says this model cannot disable reasoning. */
+function rejectsDisabledReasoning(message: string | undefined): boolean {
+  return message !== undefined && /only type=enabled is allowed/i.test(message);
+}
+
+export function classifyKimiStatus(status: number, bodyType: string | undefined, bodyMessage?: string): KimiError {
+  if (status === 400 && rejectsDisabledReasoning(bodyMessage)) {
+    // Retryable: the caller downgrades to a reasoning mode and tries again.
+    return new KimiError("reasoning-required", "Kimi model requires reasoning to be enabled", true);
+  }
+  return classifyStatusOnly(status, bodyType);
+}
+
+function classifyStatusOnly(status: number, bodyType: string | undefined): KimiError {
   if (status === 401 || status === 403) {
     return new KimiError("auth", "Kimi rejected the API key", false);
   }
@@ -276,8 +305,19 @@ export function classifyKimiStatus(status: number, bodyType: string | undefined)
   return new KimiError("upstream", `Kimi request failed (${status})`, false);
 }
 
+/**
+ * The requested effort, unless this model has already told us it refuses to
+ * disable reasoning. `"low"` is the substitute: it is the cheapest mode such a
+ * model will accept.
+ */
+function effectiveEffort(model: string, requested: ReasoningEffort): ReasoningEffort {
+  const forced = forcedEffort.get(model);
+  if (forced !== undefined && requested === "none") return forced;
+  return requested;
+}
+
 async function requestOnce(opts: KimiOptions): Promise<{ text: string; usage: KimiUsage }> {
-  const effort = opts.reasoningEffort ?? DEFAULT_EFFORT;
+  const effort = effectiveEffort(opts.model, opts.reasoningEffort ?? DEFAULT_EFFORT);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? TIMEOUT_MS);
   try {
@@ -345,6 +385,13 @@ export async function callKimi<T>(
       }
     } catch (err) {
       lastError = err instanceof KimiError ? err : new KimiError("network", "Unexpected Kimi client error", true);
+      if (lastError.code === "reasoning-required") {
+        // Learn it once, so every later call on this model skips the rejection
+        // instead of paying a failed round trip for it.
+        forcedEffort.set(opts.model, "low");
+        console.error(`[kimi] ${opts.model} requires reasoning; using effort "low" for this model from now on`);
+        continue;
+      }
       if (!lastError.retryable) throw lastError;
     }
   }
