@@ -7,6 +7,22 @@ const PERSONA =
   "You are an independent product research analyst. You are decisive when evidence is strong and explicitly honest about uncertainty when it is not. You are never influenced by advertising, retailers, affiliates, or sponsorships.";
 
 /** Carried verbatim into every evidence + synthesis prompt. Non-negotiable. */
+/**
+ * Appended to the grounded evidence prompt when the research provider returns
+ * no structured citation metadata (Kimi/Moonshot injects search results into
+ * the conversation and hands back only a search id, unlike Gemini's
+ * groundingChunks). The model's own printed URLs then ARE the citations, so
+ * they have to be demanded explicitly and in a parseable shape.
+ */
+export const SOURCE_CITATION_RULE = `
+
+End your answer with a section headed exactly "SOURCES:" listing every page you actually used, one per line, formatted as:
+Page title | https://full-url
+
+List only URLs you genuinely retrieved in this search. Never invent a URL, never cite a page you did not read, and never list a search-results page.`;
+
+export const SOURCE_CITATION_RULE_VERSION = "1.0.0";
+
 export const ANTI_FABRICATION_RULE =
   "Never invent exact review counts, availability, or prices; use ranges or say 'Check retailer' where evidence is weak.";
 
@@ -196,6 +212,7 @@ Respond with ONLY a JSON object in exactly this shape:
 export type PromptStage = keyof typeof PROMPTS;
 
 export const promptVersions = (): Record<string, string> => ({
+  sourceCitation: SOURCE_CITATION_RULE_VERSION,
   classify: PROMPTS.classify.version,
   evidence: PROMPTS.evidence.version,
   synthesize: PROMPTS.synthesize.version,

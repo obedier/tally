@@ -215,6 +215,18 @@ const productImageFailed = z.object({
 });
 
 /**
+ * Which provider actually produced a report. `used !== configured` means the
+ * primary failed and the backup ran — quality must be attributable to the
+ * engine that really answered, not the one that was supposed to.
+ */
+const researchProviderUsed = z.object({
+  name: z.literal("research_provider_used"),
+  reportId: z.string().min(1),
+  configured: z.enum(["kimi", "gemini"]),
+  used: z.enum(["kimi", "gemini"]),
+});
+
+/**
  * Estimated cost of one research run, per provider.
  *
  * Unit economics for the business model: this is what decides whether Tally can
@@ -245,7 +257,7 @@ const researchCost = z.object({
 const reviewSecondOpinion = z.object({
   name: z.literal("review_second_opinion"),
   reportId: z.string().min(1),
-  provider: z.literal("kimi"),
+  provider: z.enum(["kimi", "gemini"]),
   agrees: z.boolean(),
 });
 
@@ -284,6 +296,7 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   productImageFailed,
   reviewSecondOpinion,
   researchCost,
+  researchProviderUsed,
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;
 

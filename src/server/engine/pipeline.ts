@@ -24,10 +24,12 @@ import {
   deriveHoursSaved,
   shouldStopDeepEvidence,
 } from "./controls";
-import { PROMPTS, promptVersions } from "./prompts";
+import { PROMPTS, promptVersions, SOURCE_CITATION_RULE } from "./prompts";
 import { harvestImages, summarizeHarvest, type ImageTask } from "./images";
 import { auditReviewSummary } from "./reviewAudit";
 import { createCostLedger } from "./costLedger";
+import { resolveProviders, withFallback, type ResearchProvider } from "./researchProvider";
+import { KimiError } from "../kimi";
 import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
 import { domainFromChunk, usableChunks, type RawChunk } from "./sources";
 import { getReport, saveReport, saveServerEvent } from "../db";
@@ -365,6 +367,25 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     ledger.add("gemini", opts.model, res.usage);
     return res;
   };
+  // PRIMARY research (grounded evidence + synthesis) runs on the configured
+  // provider; the cheap mechanical stages stay on Gemini's fast model. The
+  // backup runs only if the primary fails outright — a slower answer beats none.
+  const providers = resolveProviders(env);
+  if (providers === null) {
+    throw new PipelineError("engine-not-configured", "No research provider is configured.", false);
+  }
+  let researchProviderUsed: string = providers.primary.id;
+  const runOnProvider = async <T>(fn: (p: ResearchProvider) => Promise<T>): Promise<T> =>
+    withFallback(providers, fn, (from, to, err) => {
+      console.error(
+        `[pipeline] ${from} research failed; falling back to ${to}:`,
+        err instanceof Error ? err.message : err,
+      );
+      // A failed attempt still consumed tokens; billing only successes would
+      // make a flaky provider look free exactly when it is costing the most.
+      if (err instanceof KimiError) ledger.add("kimi", env.kimiModel, err.usage);
+      researchProviderUsed = to;
+    });
   const timings: StageTiming[] = [];
   const elapsed = (): number => Date.now() - t0;
 
@@ -482,28 +503,28 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
           // Step 1 — grounded FREE TEXT so the search tool actually runs
           // (JSON-demand prompts make newer models skip search and answer from
           // memory — fabricated "evidence"; see prompts.ts evidence v2.0.0).
-          const research = await callGeminiBilled(
-            {
-              apiKey,
-              model,
-              grounded: true,
-              prompt: PROMPTS.evidence.build({
-                query,
-                categoryLabel,
-                criteria: playbook.criteria,
-                assumptions: affirmedAssumptionTexts(assumptions),
-                questions: group.map((q) => ({ id: q.id, text: q.text })),
-                ...(locationLabel === undefined ? {} : { location: locationLabel }),
-                locationKnown,
-                concise: input.mode === "quick",
-              }),
-            },
-            (text) => text,
-          );
+          const research = await runOnProvider(async (provider) => {
+            const base = PROMPTS.evidence.build({
+              query,
+              categoryLabel,
+              criteria: playbook.criteria,
+              assumptions: affirmedAssumptionTexts(assumptions),
+              questions: group.map((q) => ({ id: q.id, text: q.text })),
+              ...(locationLabel === undefined ? {} : { location: locationLabel }),
+              locationKnown,
+              concise: input.mode === "quick",
+            });
+            // Gemini returns structured groundingChunks; Kimi returns none, so
+            // it must print its citations or the report has no sources.
+            const prompt = provider.id === "kimi" ? `${base}${SOURCE_CITATION_RULE}` : base;
+            const out = await provider.grounded(prompt);
+            ledger.add(provider.id, provider.model, out.usage);
+            return out;
+          });
           // Step 2 — ungrounded structuring; the notes are the only source.
           // Fast model first, main model as fallback (same policy as classify).
           const structurePrompt = PROMPTS.evidenceStructure.build({
-            notes: research.data,
+            notes: research.text,
             questionIds: group.map((q) => q.id),
           });
           const structureOnce = async (m: string) =>
@@ -524,7 +545,9 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
           }
           return {
             value: { data: structured.data, sources: research.sources },
-            retries: research.retries + structured.retries,
+            // The provider layer owns its own retries; only the structuring
+            // step reports a countable retry here.
+            retries: structured.retries,
           };
         },
         `${group.length} question${group.length === 1 ? "" : "s"}`,
@@ -584,6 +607,18 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     throw new PipelineError("research-failed", "Evidence gathering failed. Nothing was fabricated — please retry.", true);
   }
   if (evidenceFailures > 0) ctx.retried = true;
+  // Thin evidence is allowed and labelled as thin (see D-036). ZERO sources is
+  // a different thing: nothing at all backs the verdict, so the report cannot
+  // honestly be called evidence-backed and must not ship. This became reachable
+  // when a provider that returns unstructured citations became primary.
+  if (usableChunks(allChunks).length === 0) {
+    ctx.stage = "evidence";
+    throw new PipelineError(
+      "research-failed",
+      "Research produced no usable sources. Nothing was fabricated — please retry.",
+      true,
+    );
+  }
 
   // Honest time-saved estimate from real observables only.
   const answeredQuestions = plan.filter((q) => q.status === "done").length;
@@ -601,38 +636,37 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   const evidenceNotes = evidenceOutputs
     .map((e, i) => `Evidence batch ${i + 1}: ${JSON.stringify(e)}`)
     .join("\n");
+  // Synthesis is primary research output, so it runs on the research provider —
+  // and it must NOT run on the audit model, or the second opinion would be a
+  // model grading its own homework.
   const synthesis = await runStage("synthesize", async () => {
-    const res = await callGeminiBilled(
-      {
-        apiKey,
-        model,
-        grounded: false,
-        // Synthesis over full-mode evidence produces large JSON; the default
-        // ungrounded timeout (25s) sits below observed generation time (~23s
-        // quick, more for full) and caused hard failures at this stage.
-        timeoutMs: 90_000,
-        prompt: PROMPTS.synthesize.build({
-          query,
-          queryType: classify.queryType,
-          categoryLabel,
-          criteria: playbook.criteria,
-          assumptions: affirmedAssumptionTexts(assumptions),
-          evidenceNotes,
-          sourceList,
-          ...(locationLabel === undefined ? {} : { location: locationLabel }),
-          locationKnown,
-          concise: input.mode === "quick",
-        }),
-      },
-      (text) => {
-        const json = extractJson(text);
-        if (typeof json !== "object" || json === null || Array.isArray(json)) {
-          throw new GeminiError("parse", "Synthesis output was not a JSON object", true);
-        }
-        return json;
-      },
-    );
-    return { value: res.data, retries: res.retries };
+    const synthesisPrompt = PROMPTS.synthesize.build({
+      query,
+      queryType: classify.queryType,
+      categoryLabel,
+      criteria: playbook.criteria,
+      assumptions: affirmedAssumptionTexts(assumptions),
+      evidenceNotes,
+      sourceList,
+      ...(locationLabel === undefined ? {} : { location: locationLabel }),
+      locationKnown,
+      concise: input.mode === "quick",
+    });
+    const parseSynthesis = (text: string): object => {
+      const json = extractJson(text);
+      if (typeof json !== "object" || json === null || Array.isArray(json)) {
+        throw new GeminiError("parse", "Synthesis output was not a JSON object", true);
+      }
+      return json;
+    };
+    const res = await runOnProvider(async (provider) => {
+      // 90s: the default ungrounded timeout (25s) sits below observed
+      // generation time and caused hard failures at this stage.
+      const out = await provider.json(synthesisPrompt, parseSynthesis, 90_000);
+      ledger.add(provider.id, provider.model, out.usage);
+      return out;
+    });
+    return { value: res.data, retries: 0 };
   });
 
   // 5. Sanitize + assemble (pure, server-side, schema-validated).
@@ -742,6 +776,15 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // reasoning model, and quick mode's whole latency target is ~30s. Trading the
   // fast path's headline promise for a cross-check nobody asked for would
   // invert the priority order in CLAUDE.md (speed serves usefulness here).
+  //
+  // The auditor is always the provider that did NOT produce the synthesis. With
+  // Kimi as primary that is cheap Gemini (2.5-flash-lite); flipping
+  // RESEARCH_PROVIDER back to gemini flips the auditor to Kimi automatically,
+  // so the independence property survives the config switch.
+  const auditor =
+    researchProviderUsed === "kimi"
+      ? { provider: "gemini" as const, apiKey: env.geminiApiKey, model: env.auditModel }
+      : { provider: "kimi" as const, apiKey: env.kimiApiKey, model: env.kimiModel };
   const bestFitRating = finalReport.bestFit.rating;
   if (bestFitRating !== null && input.mode !== "quick") {
     emit({ type: "stage", stage: "second-opinion", status: "started", elapsedMs: elapsed(), detail: "cross-checking reviews" });
@@ -752,10 +795,10 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
         ratingValue: bestFitRating.value,
         evidenceNotes,
       },
-      { apiKey: env.kimiApiKey, model: env.kimiModel },
+      auditor,
     );
     // Billed even when the audit failed to parse: those tokens were still spent.
-    ledger.add("kimi", env.kimiModel, kimiUsage);
+    ledger.add(auditor.provider, auditor.model, kimiUsage);
     if (secondOpinion !== null) {
       const withOpinion = ReportSchema.safeParse({
         ...finalReport,
@@ -792,6 +835,12 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     }
   }
   const cost = ledger.summary();
+  recordServerEvent(ids, {
+    name: "research_provider_used",
+    reportId: report2.id,
+    configured: env.researchProvider,
+    used: researchProviderUsed,
+  });
   recordServerEvent(ids, {
     name: "research_cost",
     reportId: report2.id,

@@ -100,6 +100,28 @@ control adjacent to an open control at under 44pt is a real misfire risk.
 
 ---
 
+### 11. Revisit Kimi as the primary research engine
+**What:** Re-trial `RESEARCH_PROVIDER=kimi` once the two blockers below are solved.
+**Why:** The attraction is real and measured — ~2.7x cheaper per grounded search
+(a Gemini full research is $0.1673, 63% of it per-request grounding), and Kimi
+cites **direct publisher URLs** where Gemini returns `vertexaisearch` redirect
+wrappers. Those wrappers are a root cause of the 24% image-harvest rate and of
+weak source links.
+**Blockers, both measured on 2026-07-29:**
+1. *Citations.* Moonshot injects search results server-side and returns no
+   structured chunks, so the model must print its own SOURCES block. It did in
+   isolation (3 clean URLs) but not under the real evidence prompt — twice
+   producing grounded text with zero citable URLs. Needs either a reliable
+   citation prompt or a Moonshot API that exposes the result list.
+2. *Latency.* Synthesis timed out at 180s; a quick research took 450s end to end
+   and still fell back to Gemini for both stages. k2.6 is a reasoning model and
+   there is no non-reasoning Kimi model on this account.
+**Context:** Everything is already built and tested — `researchProvider.ts`,
+`callKimiGrounded`, fallback, per-provider cost tracking, and the auditor
+independence rule that flips the second opinion automatically. Re-trial is one
+env var. **Effort:** M to re-trial · **Priority:** P2 if image quality or unit
+cost becomes pressing
+
 ## P3
 
 ### 7. Resolve hostnames before fetching (SSRF hardening)

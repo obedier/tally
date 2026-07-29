@@ -22,6 +22,7 @@
 
 import { z } from "zod";
 import type { SecondOpinion } from "../../shared/report";
+import { callGemini, GeminiError } from "../gemini";
 import { callKimi, KimiError, type KimiUsage } from "../kimi";
 
 /** Version-stamped like every other prompt, per docs/LEARNING.md. */
@@ -94,12 +95,40 @@ export function parseReviewAudit(text: string): z.infer<typeof AuditSchema> {
   return parsed.data;
 }
 
+/**
+ * Which provider audits. It must never be the one that wrote the synthesis —
+ * `resolveAuditor` in the pipeline enforces that — because a model reviewing
+ * its own output is precisely the failure this mechanism exists to catch.
+ */
+export type AuditProvider = "gemini" | "kimi";
+
 export type ReviewAuditDeps = {
+  readonly provider: AuditProvider;
   readonly apiKey: string | null;
   readonly model: string;
-  /** Injectable for tests; defaults to the real Kimi client. */
-  readonly call?: typeof callKimi;
+  /** Injectable for tests; defaults to the real provider client. */
+  readonly call?: (prompt: string, deps: ReviewAuditDeps) => Promise<{ data: AuditVerdict; usage: KimiUsage }>;
 };
+
+export type AuditVerdict = z.infer<typeof AuditSchema>;
+
+/** Calls whichever provider is configured to audit, normalising usage. */
+async function callAuditor(
+  prompt: string,
+  deps: ReviewAuditDeps,
+): Promise<{ data: AuditVerdict; usage: KimiUsage }> {
+  const apiKey = deps.apiKey as string;
+  if (deps.provider === "gemini") {
+    const res = await callGemini(
+      { apiKey, model: deps.model, grounded: false, prompt },
+      parseReviewAudit,
+    );
+    return { data: res.data, usage: { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens } };
+  }
+  // Reasoning tokens count against max_tokens; see DEFAULT_MAX_TOKENS in kimi.ts.
+  const res = await callKimi({ apiKey, model: deps.model, prompt, maxTokens: 3000 }, parseReviewAudit);
+  return { data: res.data, usage: res.usage };
+}
 
 /**
  * The audit plus what it cost. Usage is reported even on a failed parse, since
@@ -126,21 +155,12 @@ export async function auditReviewSummary(
   if (input.reviewSummary.trim() === "" || input.evidenceNotes.trim() === "") {
     return { opinion: null, usage: NO_USAGE };
   }
-  const call = deps.call ?? callKimi;
+  const call = deps.call ?? callAuditor;
   try {
-    const { data: audit, usage } = await call(
-      {
-        apiKey: deps.apiKey,
-        model: deps.model,
-        prompt: buildReviewAuditPrompt(input),
-        // Reasoning tokens count against this; see DEFAULT_MAX_TOKENS in kimi.ts.
-        maxTokens: 3000,
-      },
-      parseReviewAudit,
-    );
+    const { data: audit, usage } = await call(buildReviewAuditPrompt(input), deps);
     return {
       opinion: {
-        provider: "kimi",
+        provider: deps.provider,
         model: deps.model,
         agrees: audit.agrees,
         note: audit.note.trim(),
@@ -150,7 +170,8 @@ export async function auditReviewSummary(
   } catch (err) {
     // Logged without the key and without user content: the point of the log is
     // that a disabled cross-check never becomes invisible to the operator.
-    const code = err instanceof KimiError ? err.code : "unknown";
+    const code =
+      err instanceof KimiError || err instanceof GeminiError ? err.code : "unknown";
     console.error(`[review-audit] second opinion unavailable (${code})`);
     // A failed audit that still burned tokens must appear on the bill.
     return { opinion: null, usage: err instanceof KimiError ? err.usage : NO_USAGE };

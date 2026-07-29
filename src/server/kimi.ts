@@ -70,6 +70,20 @@ export type KimiOptions = {
   readonly timeoutMs?: number;
 };
 
+type ToolCall = {
+  id: string;
+  function?: { name?: string; arguments?: string };
+};
+
+type GroundedResponse = {
+  choices?: Array<{
+    message?: { content?: string; tool_calls?: ToolCall[] };
+    finish_reason?: string;
+  }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  error?: { message?: string; type?: string };
+};
+
 type ChatCompletionResponse = {
   choices?: Array<{ message?: { content?: string } }>;
   usage?: {
@@ -188,4 +202,147 @@ export async function callKimi<T>(
     }
   }
   throw lastError;
+}
+
+/**
+ * A grounded research call: Kimi runs Moonshot's `$web_search` builtin, then
+ * answers over the retrieved pages.
+ *
+ * How this differs from Gemini's grounding, and why it matters:
+ * - Gemini returns structured `groundingChunks`; Moonshot injects the search
+ *   results into the conversation server-side and hands back only a search id.
+ *   So the citations must come from the model's own answer, which is why the
+ *   evidence prompt is required to end with a SOURCES block.
+ * - The URLs Kimi cites are DIRECT publisher links. Gemini's are
+ *   vertexaisearch redirect wrappers, which is what has been defeating image
+ *   harvesting and source-link quality.
+ *
+ * Slow by nature: k2.6 reasons over ~9k tokens of search results, measured at
+ * ~120s for a single search. Callers must budget for minutes, not seconds.
+ */
+
+/** Search results plus reasoning need real headroom; 3k truncates to empty. */
+const GROUNDED_MAX_TOKENS = 8000;
+/** One search, then the answer. More hops multiply a 2-minute round trip. */
+const MAX_TOOL_HOPS = 3;
+const GROUNDED_TIMEOUT_MS = 240_000;
+
+const WEB_SEARCH_TOOL = [
+  { type: "builtin_function", function: { name: "$web_search" } },
+] as const;
+
+export type KimiGroundedResult = {
+  readonly text: string;
+  readonly sources: readonly { title: string; uri: string }[];
+  readonly usage: KimiUsage;
+};
+
+/**
+ * Parses the SOURCES block the evidence prompt requires. Lines look like
+ * `Title | https://example.com/page`. Bare URLs elsewhere in the answer are a
+ * deliberate fallback — a citation the model actually printed is better
+ * evidence than none, and downstream code re-validates every URL anyway.
+ */
+export function parseKimiSources(text: string): { title: string; uri: string }[] {
+  const out: { title: string; uri: string }[] = [];
+  const seen = new Set<string>();
+  const push = (title: string, uri: string): void => {
+    const clean = uri.trim().replace(/[)\].,;]+$/, "");
+    if (!/^https?:\/\//i.test(clean) || seen.has(clean)) return;
+    seen.add(clean);
+    out.push({ title: title.trim() === "" ? clean : title.trim(), uri: clean });
+  };
+  for (const line of text.split("\n")) {
+    const piped = line.match(/^\s*[-*\d.\s]*(.+?)\s*\|\s*(https?:\/\/\S+)\s*$/i);
+    if (piped?.[1] !== undefined && piped[2] !== undefined) {
+      push(piped[1], piped[2]);
+      continue;
+    }
+    for (const m of line.matchAll(/https?:\/\/\S+/gi)) push("", m[0]);
+  }
+  return out;
+}
+
+export async function callKimiGrounded(opts: KimiOptions): Promise<KimiGroundedResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? GROUNDED_TIMEOUT_MS);
+  const messages: unknown[] = [{ role: "user", content: opts.prompt }];
+  let inputTokens = 0;
+  let outputTokens = 0;
+  try {
+    for (let hop = 0; hop < MAX_TOOL_HOPS; hop += 1) {
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}/chat/completions`, {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.apiKey}` },
+          body: JSON.stringify({
+            model: opts.model,
+            temperature: TEMPERATURE,
+            max_tokens: opts.maxTokens ?? GROUNDED_MAX_TOKENS,
+            messages,
+            tools: WEB_SEARCH_TOOL,
+          }),
+        });
+      } catch (err) {
+        const aborted = err instanceof Error && err.name === "AbortError";
+        throw new KimiError(
+          aborted ? "timeout" : "network",
+          aborted ? "Kimi grounded call timed out" : "Kimi grounded call failed to connect",
+          true,
+          { inputTokens, outputTokens },
+        );
+      }
+
+      let parsed: GroundedResponse;
+      try {
+        parsed = (await res.json()) as GroundedResponse;
+      } catch {
+        throw classifyKimiStatus(res.status, undefined);
+      }
+      if (!res.ok) {
+        const err = classifyKimiStatus(res.status, parsed.error?.type);
+        throw new KimiError(err.code, err.message, err.retryable, { inputTokens, outputTokens });
+      }
+      inputTokens += parsed.usage?.prompt_tokens ?? 0;
+      outputTokens += parsed.usage?.completion_tokens ?? 0;
+
+      const choice = parsed.choices?.[0];
+      const message = choice?.message;
+      if (choice?.finish_reason === "tool_calls" && message?.tool_calls !== undefined) {
+        messages.push(message);
+        // Moonshot's builtin executes server-side; echoing the arguments back
+        // is how the protocol asks us to acknowledge it.
+        for (const call of message.tool_calls) {
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            name: call.function?.name ?? "$web_search",
+            content: call.function?.arguments ?? "{}",
+          });
+        }
+        continue;
+      }
+
+      const text = message?.content ?? "";
+      if (text.trim() === "") {
+        // Empty content with finish_reason "length" means reasoning consumed
+        // the whole budget — a real failure mode of this model, not a fluke.
+        throw new KimiError(
+          "parse",
+          `Kimi grounded answer was empty (finish_reason: ${choice?.finish_reason ?? "unknown"})`,
+          true,
+          { inputTokens, outputTokens },
+        );
+      }
+      return { text, sources: parseKimiSources(text), usage: { inputTokens, outputTokens } };
+    }
+    throw new KimiError("upstream", "Kimi kept requesting tools past the hop limit", false, {
+      inputTokens,
+      outputTokens,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }

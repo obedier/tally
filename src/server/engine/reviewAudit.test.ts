@@ -78,7 +78,7 @@ describe("auditReviewSummary", () => {
     const call = vi
       .fn()
       .mockResolvedValue({ data: { agrees: false, note: "No source states night-mode volume." }, usage: USAGE });
-    const out = await auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call });
+    const out = await auditReviewSummary(INPUT, { provider: "kimi" as const, apiKey: "k", model: "kimi-k2.6", call });
     expect(out.opinion).toEqual({
       provider: "kimi",
       model: "kimi-k2.6",
@@ -90,7 +90,7 @@ describe("auditReviewSummary", () => {
 
   it("returns 'not checked' with no spend when no second provider is configured", async () => {
     const call = vi.fn();
-    const out = await auditReviewSummary(INPUT, { apiKey: null, model: "kimi-k2.6", call });
+    const out = await auditReviewSummary(INPUT, { provider: "kimi" as const, apiKey: null, model: "kimi-k2.6", call });
     expect(out.opinion).toBeNull();
     expect(out.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
     expect(call).not.toHaveBeenCalled();
@@ -98,24 +98,43 @@ describe("auditReviewSummary", () => {
 
   it("never throws when the provider fails, so a report can still ship", async () => {
     const call = vi.fn().mockRejectedValue(new KimiError("quota", "out of balance", false));
-    const out = await auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call });
+    const out = await auditReviewSummary(INPUT, { provider: "kimi" as const, apiKey: "k", model: "kimi-k2.6", call });
     expect(out.opinion).toBeNull();
   });
 
   it("survives an unexpected non-Kimi error too", async () => {
     const call = vi.fn().mockRejectedValue(new Error("boom"));
-    const out = await auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call });
+    const out = await auditReviewSummary(INPUT, { provider: "kimi" as const, apiKey: "k", model: "kimi-k2.6", call });
     expect(out.opinion).toBeNull();
   });
 
   it("skips the call when there is nothing to audit", async () => {
     const call = vi.fn();
     expect(
-      (await auditReviewSummary({ ...INPUT, reviewSummary: "  " }, { apiKey: "k", model: "m", call })).opinion,
+      (await auditReviewSummary({ ...INPUT, reviewSummary: "  " }, { provider: "kimi" as const, apiKey: "k", model: "m", call })).opinion,
     ).toBeNull();
     expect(
-      (await auditReviewSummary({ ...INPUT, evidenceNotes: "" }, { apiKey: "k", model: "m", call })).opinion,
+      (await auditReviewSummary({ ...INPUT, evidenceNotes: "" }, { provider: "kimi" as const, apiKey: "k", model: "m", call })).opinion,
     ).toBeNull();
     expect(call).not.toHaveBeenCalled();
+  });
+});
+
+describe("auditor independence", () => {
+  it("labels the opinion with the provider that actually audited", async () => {
+    // The whole mechanism is worthless if the auditor is the author, so the
+    // recorded provider must be the auditing one, not a hardcoded name.
+    const call = vi.fn().mockResolvedValue({
+      data: { agrees: true, note: "Two cited pages state this." },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    const out = await auditReviewSummary(INPUT, {
+      provider: "gemini",
+      apiKey: "k",
+      model: "gemini-2.5-flash-lite",
+      call,
+    });
+    expect(out.opinion?.provider).toBe("gemini");
+    expect(out.opinion?.model).toBe("gemini-2.5-flash-lite");
   });
 });

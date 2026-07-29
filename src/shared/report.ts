@@ -191,7 +191,8 @@ export type StageTiming = z.infer<typeof StageTimingSchema>;
  * "not checked", never as "checked and fine".
  */
 export const SecondOpinionSchema = z.object({
-  provider: z.literal("kimi"),
+  /** Whichever provider did NOT write the synthesis under audit. */
+  provider: z.enum(["kimi", "gemini"]),
   model: z.string().min(1),
   agrees: z.boolean(),
   /** One sentence, the reviewer's own words. Bounded so it can't run long. */
