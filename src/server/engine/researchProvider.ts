@@ -6,15 +6,22 @@
  * reversibility: switching the engine back to Gemini is one env var
  * (`RESEARCH_PROVIDER=gemini`), not a revert.
  *
- * Why Kimi is the default (owner decision, 2026-07-29):
- * - ~2.7x cheaper per grounded search. Measured: a full Gemini research costs
- *   $0.1673 with 63% of that being per-request Google Search grounding.
- * - It cites DIRECT publisher URLs. Gemini's grounding returns
- *   vertexaisearch redirect wrappers, which is what has been defeating product
- *   image harvesting and degrading source links.
+ * Selecting a provider selects it for EVERY stage — grounded evidence,
+ * structuring, classify and synthesis. An earlier version left the mechanical
+ * stages hardcoded to Gemini, so "RESEARCH_PROVIDER=kimi" was never really a
+ * single-model configuration; `fastJson` exists to close that hole.
  *
- * What it costs: k2.6 is a reasoning model and one grounded search measured
- * ~120s, against a few seconds for Gemini. Research is minutes, not seconds.
+ * The case for Kimi (measured 2026-07-29):
+ * - ~2.7x cheaper per grounded search. A full Gemini research costs $0.1673,
+ *   63% of it per-request Google Search grounding.
+ * - It cites DIRECT publisher URLs. Gemini's grounding returns vertexaisearch
+ *   redirect wrappers, which is what has been defeating product image
+ *   harvesting and degrading source links.
+ *
+ * The case against: it is far slower. A grounded batch measures ~90s and
+ * synthesis ~130s, against a few seconds each for Gemini. Kimi research is
+ * minutes, not seconds — which is why Gemini remains the default and why
+ * anyone flipping this must accept the latency, not be surprised by it.
  *
  * The fallback exists because a slow answer beats no answer: if the primary
  * provider fails outright, the other one runs, and the report records which
@@ -54,6 +61,14 @@ export type ResearchProvider = {
   readonly grounded: (prompt: string) => Promise<GroundedResult>;
   /** Ungrounded call whose output must parse as JSON. */
   readonly json: <T>(prompt: string, parse: (text: string) => T, timeoutMs?: number) => Promise<JsonResult<T>>;
+  /**
+   * Ungrounded JSON for the cheap mechanical stages (classify, structuring).
+   * Split from `json` so those stages can use a smaller/faster model where the
+   * provider has one, and so that selecting a provider selects it for the WHOLE
+   * pipeline — without this, "Kimi only" still silently ran two stages on
+   * Gemini and was never actually a single-model configuration.
+   */
+  readonly fastJson: <T>(prompt: string, parse: (text: string) => T) => Promise<JsonResult<T>>;
 };
 
 function geminiProvider(env: EngineEnv, apiKey: string): ResearchProvider {
@@ -78,6 +93,13 @@ function geminiProvider(env: EngineEnv, apiKey: string): ResearchProvider {
           prompt,
           ...(timeoutMs === undefined ? {} : { timeoutMs }),
         },
+        parse,
+      );
+      return { data: res.data, usage: { ...res.usage }, provider: "gemini" };
+    },
+    fastJson: async (prompt, parse) => {
+      const res = await callGemini(
+        { apiKey, model: env.geminiFastModel, grounded: false, prompt },
         parse,
       );
       return { data: res.data, usage: { ...res.usage }, provider: "gemini" };
@@ -113,10 +135,13 @@ function kimiProvider(env: EngineEnv, apiKey: string): ResearchProvider {
           apiKey,
           model: env.kimiModel,
           prompt,
-          // Synthesis JSON is large and k2.6 reasons before emitting: the 45s
-          // default timed out on the first live run and fell back to Gemini.
-          ...(timeoutMs === undefined ? {} : { timeoutMs: Math.max(timeoutMs, 180_000) }),
-          maxTokens: 16_000,
+          // "none" is not an optimization here, it is what makes synthesis work
+          // at all: at "low" effort this exact call dies reproducibly with a
+          // connection-level `fetch failed`. Non-reasoning also removes the
+          // reasoning-token drain that was truncating output. Measured ~130s.
+          reasoningEffort: "none",
+          timeoutMs: Math.max(timeoutMs ?? 0, 240_000),
+          maxTokens: 8_000,
         },
         (text) => parse(text),
       );
@@ -125,6 +150,16 @@ function kimiProvider(env: EngineEnv, apiKey: string): ResearchProvider {
         usage: { ...res.usage, groundedRequests: 0 },
         provider: "kimi",
       };
+    },
+    fastJson: async (prompt, parse) => {
+      // Moonshot exposes no smaller sibling of k2.6, so "fast" here means the
+      // same model with reasoning off — which for mechanical extraction is
+      // both the cheapest and the most reliable configuration anyway.
+      const res = await callKimi(
+        { apiKey, model: env.kimiModel, prompt, reasoningEffort: "none", timeoutMs: 120_000, maxTokens: 4_000 },
+        (text) => parse(text),
+      );
+      return { data: res.data, usage: { ...res.usage, groundedRequests: 0 }, provider: "kimi" };
     },
   };
 }

@@ -46,22 +46,24 @@ const DEFAULT_MODEL = "gemini-2.5-flash";
 const DEFAULT_FAST_MODEL = "gemini-2.5-flash-lite";
 const DEFAULT_KIMI_MODEL = "kimi-k2.6";
 /**
- * Gemini is primary by default. The Kimi path is fully built and one env var
- * away (`RESEARCH_PROVIDER=kimi`), but it FAILED its live trial on 2026-07-29
- * for two independent reasons, both measured:
+ * Gemini is primary by default — for LATENCY only. Kimi-only research now WORKS
+ * end to end and is one env var away:
  *
- * 1. Its grounded answers did not reliably carry citations. Moonshot injects
- *    search results server-side and returns no structured chunks, so the model
- *    must print its own SOURCES block; it did so in isolation but not under the
- *    real evidence prompt, producing grounded text with zero citable URLs.
- * 2. Synthesis timed out even at 180s — k2.6 reasons at length before emitting
- *    the large report JSON.
+ *   RESEARCH_PROVIDER=kimi        # every stage runs on Kimi
+ *   RESEARCH_FALLBACK=false       # optional: no Gemini rescue, truly single-model
+ *   KIMI_API_KEY=sk-...           # (KIMI_SHELLY_API_KEY is accepted too)
  *
- * Net: a quick research took 450s and still fell back to Gemini for both
- * stages. The attraction is real (~2.7x cheaper per search, and DIRECT
- * publisher URLs instead of vertexaisearch redirect wrappers), so this is worth
- * revisiting — see docs/TODOS.md — but not at the cost of the latency contract
- * and the citation guarantee.
+ * Verified live 2026-07-29: a quick research returned a complete report with 5
+ * sources, all DIRECT publisher URLs (cnet.com, rtings.com) rather than
+ * Gemini's vertexaisearch redirect wrappers, with confidence honestly capped at
+ * medium. The earlier "Kimi cannot cite" diagnosis was wrong; the real causes
+ * were an output limit truncating the trailing SOURCES block, and a dropped
+ * `type: "builtin_function"` that stopped the search from ever running.
+ *
+ * What still keeps it off by default is SPEED, and only speed: that run took
+ * 442s, 89% of it in the single grounded evidence call, against seconds for
+ * Gemini. Flipping this trades a ~30s research for a ~7min one. See
+ * docs/TODOS.md item 11 before changing the default.
  */
 const DEFAULT_RESEARCH_PROVIDER: ResearchProviderId = "gemini";
 /** 2.5-flash-lite: ~6x cheaper output than 3.5-flash, and audits are short. */

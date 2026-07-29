@@ -17,7 +17,7 @@ import {
 } from "../../shared/report";
 import { PLAYBOOKS, questionsForMode, type Playbook } from "../../shared/playbooks";
 import { loadEnv } from "../env";
-import { callGemini, extractJson, GeminiError } from "../gemini";
+import { extractJson, GeminiError } from "../gemini";
 import {
   affirmedAssumptionTexts,
   applyControls,
@@ -318,11 +318,9 @@ export async function runResearch(input: ResearchInput): Promise<Report> {
 
 async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number): Promise<Report> {
   const env = loadEnv();
-  if (env.geminiApiKey === null) {
-    throw new PipelineError("engine-not-configured", "The research engine is not configured on this server.", false);
-  }
-  const apiKey = env.geminiApiKey;
-  const model = env.geminiModel;
+  // No Gemini-key guard here: requiring one would make RESEARCH_PROVIDER=kimi
+  // impossible to run standalone. resolveProviders below is the real check —
+  // it fails only when NEITHER provider has credentials.
   const query = input.query.trim();
   // Coarse location scopes local-retailer research; "default"-source labels are
   // treated as unknown so we never invent local stores (M3 gate 2).
@@ -362,19 +360,17 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // Every model call in this run bills to one ledger so the report can carry a
   // measured unit cost rather than an estimate of an estimate.
   const ledger = createCostLedger();
-  const callGeminiBilled: typeof callGemini = async (opts, parse) => {
-    const res = await callGemini(opts, parse);
-    ledger.add("gemini", opts.model, res.usage);
-    return res;
-  };
-  // PRIMARY research (grounded evidence + synthesis) runs on the configured
-  // provider; the cheap mechanical stages stay on Gemini's fast model. The
-  // backup runs only if the primary fails outright — a slower answer beats none.
+  // EVERY stage runs on the configured provider — grounded evidence,
+  // structuring, classify and synthesis alike. The backup runs only if the
+  // primary fails outright: a slower answer beats no answer.
   const providers = resolveProviders(env);
   if (providers === null) {
     throw new PipelineError("engine-not-configured", "No research provider is configured.", false);
   }
   let researchProviderUsed: string = providers.primary.id;
+  // Reported as meta.model, so it must name what actually ran, including after
+  // a fallback — otherwise a Gemini-produced report is attributed to Kimi.
+  let model: string = providers.primary.model;
   const runOnProvider = async <T>(fn: (p: ResearchProvider) => Promise<T>): Promise<T> =>
     withFallback(providers, fn, (from, to, err) => {
       console.error(
@@ -385,6 +381,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       // make a flaky provider look free exactly when it is costing the most.
       if (err instanceof KimiError) ledger.add("kimi", env.kimiModel, err.usage);
       researchProviderUsed = to;
+      if (providers.backup !== null) model = providers.backup.model;
     });
   const timings: StageTiming[] = [];
   const elapsed = (): number => Date.now() - t0;
@@ -414,23 +411,14 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // 1. Classify (one ungrounded JSON call on the fast model; one fallback to
   // the main model on any fast-model error — S1 latency target).
   const classify: ClassifyOutput = await runStage("classify", async () => {
-    const classifyOnce = async (m: string) =>
-      callGeminiBilled(
-        { apiKey, model: m, prompt: PROMPTS.classify.build({ query }), grounded: false },
-        (text) => ClassifySchema.parse(extractJson(text)),
+    const res = await runOnProvider(async (provider) => {
+      const out = await provider.fastJson(PROMPTS.classify.build({ query }), (text) =>
+        ClassifySchema.parse(extractJson(text)),
       );
-    try {
-      const res = await classifyOnce(env.geminiFastModel);
-      return { value: res.data, retries: res.retries };
-    } catch (err) {
-      if (env.geminiFastModel === model) throw err;
-      console.error(
-        "[pipeline] fast-model classify failed; falling back to main model",
-        err instanceof Error ? err.message : err,
-      );
-      const res = await classifyOnce(model);
-      return { value: res.data, retries: res.retries + 1 };
-    }
+      ledger.add(provider.id, provider.model, out.usage);
+      return out;
+    });
+    return { value: res.data, retries: 0 };
   });
 
   let assumptions: Assumption[] = resolveAssumptions(input.seedAssumptions, classify.assumptions);
@@ -527,27 +515,17 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
             notes: research.text,
             questionIds: group.map((q) => q.id),
           });
-          const structureOnce = async (m: string) =>
-            callGeminiBilled(
-              { apiKey, model: m, grounded: false, prompt: structurePrompt },
-              (text) => EvidenceSchema.parse(extractJson(text)),
+          const structured = await runOnProvider(async (provider) => {
+            const out = await provider.fastJson(structurePrompt, (text) =>
+              EvidenceSchema.parse(extractJson(text)),
             );
-          let structured;
-          try {
-            structured = await structureOnce(env.geminiFastModel);
-          } catch (err) {
-            if (env.geminiFastModel === model) throw err;
-            console.error(
-              "[pipeline] fast-model evidence structuring failed; falling back to main model",
-              err instanceof Error ? err.message : err,
-            );
-            structured = await structureOnce(model);
-          }
+            ledger.add(provider.id, provider.model, out.usage);
+            return out;
+          });
           return {
             value: { data: structured.data, sources: research.sources },
-            // The provider layer owns its own retries; only the structuring
-            // step reports a countable retry here.
-            retries: structured.retries,
+            // The provider layer owns its own retries and fallback.
+            retries: 0,
           };
         },
         `${group.length} question${group.length === 1 ? "" : "s"}`,

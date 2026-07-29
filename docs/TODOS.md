@@ -100,27 +100,31 @@ control adjacent to an open control at under 44pt is a real misfire risk.
 
 ---
 
-### 11. Revisit Kimi as the primary research engine
-**What:** Re-trial `RESEARCH_PROVIDER=kimi` once the two blockers below are solved.
-**Why:** The attraction is real and measured — ~2.7x cheaper per grounded search
-(a Gemini full research is $0.1673, 63% of it per-request grounding), and Kimi
-cites **direct publisher URLs** where Gemini returns `vertexaisearch` redirect
-wrappers. Those wrappers are a root cause of the 24% image-harvest rate and of
-weak source links.
-**Blockers, both measured on 2026-07-29:**
-1. *Citations.* Moonshot injects search results server-side and returns no
-   structured chunks, so the model must print its own SOURCES block. It did in
-   isolation (3 clean URLs) but not under the real evidence prompt — twice
-   producing grounded text with zero citable URLs. Needs either a reliable
-   citation prompt or a Moonshot API that exposes the result list.
-2. *Latency.* Synthesis timed out at 180s; a quick research took 450s end to end
-   and still fell back to Gemini for both stages. k2.6 is a reasoning model and
-   there is no non-reasoning Kimi model on this account.
-**Context:** Everything is already built and tested — `researchProvider.ts`,
-`callKimiGrounded`, fallback, per-provider cost tracking, and the auditor
-independence rule that flips the second opinion automatically. Re-trial is one
-env var. **Effort:** M to re-trial · **Priority:** P2 if image quality or unit
-cost becomes pressing
+### 11. Cut Kimi's evidence latency so it can become the default engine
+**What:** Reduce the grounded evidence call from ~394s. It is 89% of a 442s
+Kimi-only research and the ONLY thing keeping Gemini as the default.
+**Why:** Kimi-only research now works correctly end to end (D-050) and cites
+**direct publisher URLs** where Gemini returns `vertexaisearch` redirect
+wrappers — the root cause of the 24% image-harvest rate and weak source links —
+at ~2.7x lower cost per search. Only speed is missing.
+**The measured bottleneck:** one grounded call generating ~10,827 output tokens
+at Moonshot's ~30 tok/s. This is an OUTPUT LENGTH problem, not a model-choice
+one — classify (7.6s) and synthesis (41.1s) are both fine.
+**Levers, cheapest first:**
+1. Shorten what the evidence prompt asks for in quick mode — the `concise` rule
+   exists but the model still wrote ~5.5k characters. Fewer candidates and
+   harder per-field caps should scale latency down almost linearly.
+2. Split evidence across 2 smaller parallel grounded calls instead of 1 large
+   sequential one; the pipeline already batches, it just runs them in series.
+3. Re-check Moonshot for a faster model. `kimi-k3` exists but FAILS the grounded
+   path (`tokenization failed` on the tool-echo hop); `kimi-k2.7-code-highspeed`
+   is untested for research.
+**Careful:** every iteration costs ~7 minutes of wall clock. Change one lever at
+a time and measure with `KIMI_DEBUG=1`, which logs per-hop timing.
+**Context:** `src/server/kimi.ts`, `researchProvider.ts`, D-050. Config today is
+`RESEARCH_PROVIDER=kimi` + optional `RESEARCH_FALLBACK=false`.
+**Effort:** M · **Priority:** P2 — raises to P1 if image quality or unit cost
+becomes pressing, since Kimi fixes both
 
 ## P3
 

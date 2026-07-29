@@ -16,12 +16,21 @@ const PERSONA =
  */
 export const SOURCE_CITATION_RULE = `
 
+Write the entire answer in English, including any commentary about your own searching.
+
 End your answer with a section headed exactly "SOURCES:" listing every page you actually used, one per line, formatted as:
 Page title | https://full-url
 
-List only URLs you genuinely retrieved in this search. Never invent a URL, never cite a page you did not read, and never list a search-results page.`;
+List only URLs you genuinely retrieved in this search. Never invent a URL, never cite a page you did not read, and never list a search-results page.
 
-export const SOURCE_CITATION_RULE_VERSION = "1.0.0";
+The SOURCES section is the most important part of this answer: write it even if you must shorten the sections above to make room. An answer without it is unusable.`;
+
+/**
+ * 1.1.0 adds the English instruction (k2.6 drifted into Chinese mid-answer on a
+ * live run) and the shorten-rather-than-drop directive, so that if the model
+ * approaches its output limit it sacrifices prose instead of the citations.
+ */
+export const SOURCE_CITATION_RULE_VERSION = "1.1.0";
 
 export const ANTI_FABRICATION_RULE =
   "Never invent exact review counts, availability, or prices; use ranges or say 'Check retailer' where evidence is weak.";
