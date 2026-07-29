@@ -215,6 +215,29 @@ const productImageFailed = z.object({
 });
 
 /**
+ * Estimated cost of one research run, per provider.
+ *
+ * Unit economics for the business model: this is what decides whether Tally can
+ * be free, freemium, or paid. `groundedRequests` is separate from tokens
+ * because Google Search grounding bills per request and is usually the largest
+ * line item — a token-only cost model would understate a research badly.
+ *
+ * USD figures are ESTIMATES from an operator-maintained rate table
+ * (src/shared/pricing.ts), never billing data. Never present them as invoiced.
+ */
+const researchCost = z.object({
+  name: z.literal("research_cost"),
+  reportId: z.string().min(1),
+  mode: ResearchModeSchema,
+  totalUsd: z.number().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  groundedRequests: z.number().int().nonnegative(),
+  geminiUsd: z.number().nonnegative(),
+  kimiUsd: z.number().nonnegative(),
+});
+
+/**
  * A second provider's audit of the review digest. `agrees: false` is the
  * valuable row — it marks reports where two independent models disagreed about
  * what the evidence supports, which is a direct quality signal for the engine.
@@ -260,6 +283,7 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   productImageHarvested,
   productImageFailed,
   reviewSecondOpinion,
+  researchCost,
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;
 

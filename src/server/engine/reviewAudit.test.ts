@@ -72,44 +72,49 @@ describe("parseReviewAudit", () => {
 });
 
 describe("auditReviewSummary", () => {
-  it("returns the second opinion when the auditor answers", async () => {
-    const call = vi.fn().mockResolvedValue({ agrees: false, note: "No source states night-mode volume." });
+  const USAGE = { inputTokens: 258, outputTokens: 1200 };
+
+  it("returns the second opinion and what it cost when the auditor answers", async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValue({ data: { agrees: false, note: "No source states night-mode volume." }, usage: USAGE });
     const out = await auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call });
-    expect(out).toEqual({
+    expect(out.opinion).toEqual({
       provider: "kimi",
       model: "kimi-k2.6",
       agrees: false,
       note: "No source states night-mode volume.",
     });
+    expect(out.usage).toEqual(USAGE);
   });
 
-  it("returns null — 'not checked' — when no second provider is configured", async () => {
+  it("returns 'not checked' with no spend when no second provider is configured", async () => {
     const call = vi.fn();
-    expect(await auditReviewSummary(INPUT, { apiKey: null, model: "kimi-k2.6", call })).toBeNull();
+    const out = await auditReviewSummary(INPUT, { apiKey: null, model: "kimi-k2.6", call });
+    expect(out.opinion).toBeNull();
+    expect(out.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
     expect(call).not.toHaveBeenCalled();
   });
 
   it("never throws when the provider fails, so a report can still ship", async () => {
     const call = vi.fn().mockRejectedValue(new KimiError("quota", "out of balance", false));
-    await expect(
-      auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call }),
-    ).resolves.toBeNull();
+    const out = await auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call });
+    expect(out.opinion).toBeNull();
   });
 
   it("survives an unexpected non-Kimi error too", async () => {
     const call = vi.fn().mockRejectedValue(new Error("boom"));
-    await expect(
-      auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call }),
-    ).resolves.toBeNull();
+    const out = await auditReviewSummary(INPUT, { apiKey: "k", model: "kimi-k2.6", call });
+    expect(out.opinion).toBeNull();
   });
 
   it("skips the call when there is nothing to audit", async () => {
     const call = vi.fn();
     expect(
-      await auditReviewSummary({ ...INPUT, reviewSummary: "  " }, { apiKey: "k", model: "m", call }),
+      (await auditReviewSummary({ ...INPUT, reviewSummary: "  " }, { apiKey: "k", model: "m", call })).opinion,
     ).toBeNull();
     expect(
-      await auditReviewSummary({ ...INPUT, evidenceNotes: "" }, { apiKey: "k", model: "m", call }),
+      (await auditReviewSummary({ ...INPUT, evidenceNotes: "" }, { apiKey: "k", model: "m", call })).opinion,
     ).toBeNull();
     expect(call).not.toHaveBeenCalled();
   });

@@ -22,7 +22,7 @@
 
 import { z } from "zod";
 import type { SecondOpinion } from "../../shared/report";
-import { callKimi, KimiError } from "../kimi";
+import { callKimi, KimiError, type KimiUsage } from "../kimi";
 
 /** Version-stamped like every other prompt, per docs/LEARNING.md. */
 export const REVIEW_AUDIT_PROMPT_VERSION = "1.0.0";
@@ -102,37 +102,57 @@ export type ReviewAuditDeps = {
 };
 
 /**
- * Runs the audit. Returns null — meaning "not checked" — whenever the second
- * provider is absent, unreachable, out of quota, or incoherent. Never throws.
+ * The audit plus what it cost. Usage is reported even on a failed parse, since
+ * a call that burned tokens and returned nothing still shows up on the bill —
+ * omitting it would understate unit economics exactly where it matters.
+ */
+export type ReviewAuditResult = {
+  readonly opinion: SecondOpinion | null;
+  readonly usage: KimiUsage;
+};
+
+const NO_USAGE: KimiUsage = { inputTokens: 0, outputTokens: 0 };
+
+/**
+ * Runs the audit. `opinion` is null — meaning "not checked" — whenever the
+ * second provider is absent, unreachable, out of quota, or incoherent.
+ * Never throws.
  */
 export async function auditReviewSummary(
   input: ReviewAuditInput,
   deps: ReviewAuditDeps,
-): Promise<SecondOpinion | null> {
-  if (deps.apiKey === null) return null;
-  if (input.reviewSummary.trim() === "" || input.evidenceNotes.trim() === "") return null;
+): Promise<ReviewAuditResult> {
+  if (deps.apiKey === null) return { opinion: null, usage: NO_USAGE };
+  if (input.reviewSummary.trim() === "" || input.evidenceNotes.trim() === "") {
+    return { opinion: null, usage: NO_USAGE };
+  }
   const call = deps.call ?? callKimi;
   try {
-    const audit = await call(
+    const { data: audit, usage } = await call(
       {
         apiKey: deps.apiKey,
         model: deps.model,
         prompt: buildReviewAuditPrompt(input),
-        maxTokens: 200,
+        // Reasoning tokens count against this; see DEFAULT_MAX_TOKENS in kimi.ts.
+        maxTokens: 3000,
       },
       parseReviewAudit,
     );
     return {
-      provider: "kimi",
-      model: deps.model,
-      agrees: audit.agrees,
-      note: audit.note.trim(),
+      opinion: {
+        provider: "kimi",
+        model: deps.model,
+        agrees: audit.agrees,
+        note: audit.note.trim(),
+      },
+      usage,
     };
   } catch (err) {
     // Logged without the key and without user content: the point of the log is
     // that a disabled cross-check never becomes invisible to the operator.
     const code = err instanceof KimiError ? err.code : "unknown";
     console.error(`[review-audit] second opinion unavailable (${code})`);
-    return null;
+    // A failed audit that still burned tokens must appear on the bill.
+    return { opinion: null, usage: err instanceof KimiError ? err.usage : NO_USAGE };
   }
 }

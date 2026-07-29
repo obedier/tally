@@ -27,6 +27,7 @@ import {
 import { PROMPTS, promptVersions } from "./prompts";
 import { harvestImages, summarizeHarvest, type ImageTask } from "./images";
 import { auditReviewSummary } from "./reviewAudit";
+import { createCostLedger } from "./costLedger";
 import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
 import { domainFromChunk, usableChunks, type RawChunk } from "./sources";
 import { getReport, saveReport, saveServerEvent } from "../db";
@@ -356,6 +357,14 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   const reportId = nanoid(12);
   ctx.reportId = reportId;
   const ids = anonIds(input);
+  // Every model call in this run bills to one ledger so the report can carry a
+  // measured unit cost rather than an estimate of an estimate.
+  const ledger = createCostLedger();
+  const callGeminiBilled: typeof callGemini = async (opts, parse) => {
+    const res = await callGemini(opts, parse);
+    ledger.add("gemini", opts.model, res.usage);
+    return res;
+  };
   const timings: StageTiming[] = [];
   const elapsed = (): number => Date.now() - t0;
 
@@ -385,7 +394,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // the main model on any fast-model error — S1 latency target).
   const classify: ClassifyOutput = await runStage("classify", async () => {
     const classifyOnce = async (m: string) =>
-      callGemini(
+      callGeminiBilled(
         { apiKey, model: m, prompt: PROMPTS.classify.build({ query }), grounded: false },
         (text) => ClassifySchema.parse(extractJson(text)),
       );
@@ -473,7 +482,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
           // Step 1 — grounded FREE TEXT so the search tool actually runs
           // (JSON-demand prompts make newer models skip search and answer from
           // memory — fabricated "evidence"; see prompts.ts evidence v2.0.0).
-          const research = await callGemini(
+          const research = await callGeminiBilled(
             {
               apiKey,
               model,
@@ -498,7 +507,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
             questionIds: group.map((q) => q.id),
           });
           const structureOnce = async (m: string) =>
-            callGemini(
+            callGeminiBilled(
               { apiKey, model: m, grounded: false, prompt: structurePrompt },
               (text) => EvidenceSchema.parse(extractJson(text)),
             );
@@ -593,7 +602,7 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     .map((e, i) => `Evidence batch ${i + 1}: ${JSON.stringify(e)}`)
     .join("\n");
   const synthesis = await runStage("synthesize", async () => {
-    const res = await callGemini(
+    const res = await callGeminiBilled(
       {
         apiKey,
         model,
@@ -728,10 +737,15 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
   // no hand in writing it. Strictly additive: auditReviewSummary never throws
   // and returns null when the provider is absent or unreachable, so a report is
   // never delayed past its own budget or failed by a cross-check.
+  //
+  // Skipped in quick mode: a real audit takes ~23-39s because k2.6 is a
+  // reasoning model, and quick mode's whole latency target is ~30s. Trading the
+  // fast path's headline promise for a cross-check nobody asked for would
+  // invert the priority order in CLAUDE.md (speed serves usefulness here).
   const bestFitRating = finalReport.bestFit.rating;
-  if (bestFitRating !== null) {
+  if (bestFitRating !== null && input.mode !== "quick") {
     emit({ type: "stage", stage: "second-opinion", status: "started", elapsedMs: elapsed(), detail: "cross-checking reviews" });
-    const secondOpinion = await auditReviewSummary(
+    const { opinion: secondOpinion, usage: kimiUsage } = await auditReviewSummary(
       {
         productName: finalReport.bestFit.name,
         reviewSummary: bestFitRating.summary,
@@ -740,6 +754,8 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       },
       { apiKey: env.kimiApiKey, model: env.kimiModel },
     );
+    // Billed even when the audit failed to parse: those tokens were still spent.
+    ledger.add("kimi", env.kimiModel, kimiUsage);
     if (secondOpinion !== null) {
       const withOpinion = ReportSchema.safeParse({
         ...finalReport,
@@ -775,6 +791,18 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       console.error("[pipeline] cache remember failed", err);
     }
   }
+  const cost = ledger.summary();
+  recordServerEvent(ids, {
+    name: "research_cost",
+    reportId: report2.id,
+    mode: report2.meta.mode,
+    totalUsd: cost.totalUsd,
+    inputTokens: cost.inputTokens,
+    outputTokens: cost.outputTokens,
+    groundedRequests: cost.groundedRequests,
+    geminiUsd: cost.byProvider.gemini?.usd ?? 0,
+    kimiUsd: cost.byProvider.kimi?.usd ?? 0,
+  });
   recordServerEvent(ids, {
     name: "report_completed",
     reportId: report2.id,

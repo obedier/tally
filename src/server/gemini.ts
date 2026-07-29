@@ -27,10 +27,19 @@ export type GeminiOptions = {
   readonly timeoutMs?: number;
 };
 
+/** Token counts as reported by the API; absent fields count as 0, never guessed. */
+export type GeminiUsage = {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  /** 1 when this call used Google Search grounding — billed per request. */
+  readonly groundedRequests: number;
+};
+
 export type GeminiResult<T> = {
   readonly data: T;
   readonly sources: GroundingChunk[];
   readonly retries: number;
+  readonly usage: GeminiUsage;
 };
 
 export type GeminiErrorCode = "rate-limited" | "upstream" | "network" | "timeout" | "parse";
@@ -47,6 +56,12 @@ export class GeminiError extends Error {
 }
 
 type GenerateContentResponse = {
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    /** Reasoning tokens, billed as output. Absent on non-thinking models. */
+    thoughtsTokenCount?: number;
+  };
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string }> };
     groundingMetadata?: {
@@ -59,7 +74,7 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 async function requestOnce(
   opts: GeminiOptions,
-): Promise<{ text: string; sources: GroundingChunk[] }> {
+): Promise<{ text: string; sources: GroundingChunk[]; usage: GeminiUsage }> {
   const timeoutMs = opts.timeoutMs ?? (opts.grounded ? GROUNDED_TIMEOUT_MS : UNGROUNDED_TIMEOUT_MS);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -112,7 +127,15 @@ async function requestOnce(
       const web = chunk.web;
       return web?.uri ? [{ title: web.title ?? "", uri: web.uri }] : [];
     });
-    return { text, sources };
+    const meta = payload.usageMetadata;
+    // Reasoning ("thoughts") tokens bill as output; folding them in here keeps
+    // every downstream cost figure honest for thinking-enabled models.
+    const usage: GeminiUsage = {
+      inputTokens: meta?.promptTokenCount ?? 0,
+      outputTokens: (meta?.candidatesTokenCount ?? 0) + (meta?.thoughtsTokenCount ?? 0),
+      groundedRequests: opts.grounded === true ? 1 : 0,
+    };
+    return { text, sources, usage };
   } finally {
     clearTimeout(timer);
   }
@@ -131,7 +154,7 @@ export async function callGemini<T>(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     if (attempt > 0) await sleep(BACKOFF_BASE_MS * 2 ** (attempt - 1));
     try {
-      const { text, sources } = await requestOnce(opts);
+      const { text, sources, usage } = await requestOnce(opts);
       let data: T;
       try {
         data = parse(text);
@@ -140,7 +163,7 @@ export async function callGemini<T>(
           ? err
           : new GeminiError("parse", "Gemini output failed validation", true);
       }
-      return { data, sources, retries: attempt };
+      return { data, sources, retries: attempt, usage };
     } catch (err) {
       lastError =
         err instanceof GeminiError

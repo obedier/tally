@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { GROUNDED_REQUEST_USD } from "../../shared/pricing";
 import { fileURLToPath } from "node:url";
 import { getDb } from "../db";
 
@@ -44,6 +45,8 @@ interface EventRow {
   name: string;
   props: Record<string, unknown>;
   receivedAt: string;
+  /** Anonymous device id — the only "user" proxy an account-free product has. */
+  deviceId: string;
 }
 
 interface ScorecardRow {
@@ -87,6 +90,25 @@ export interface DigestJson {
     sharePageConversion: number;
     polls: { created: number; voted: number; commented: number };
     priceWatchSet: number;
+  };
+  /**
+   * Unit economics. All USD are ESTIMATES from the operator-maintained rate
+   * table in src/shared/pricing.ts — never billing data. `perUserUsd` keys on
+   * anonymous device ids, which is the closest honest proxy for a "user" in a
+   * product with no accounts.
+   */
+  cost: {
+    reports: number;
+    totalUsd: number;
+    perResearchUsd: number;
+    perResearchByMode: { mode: string; reports: number; avgUsd: number }[];
+    activeDevices: number;
+    perUserUsd: number;
+    researchesPerUser: number;
+    groundedRequests: number;
+    groundingShareOfCost: number;
+    byProvider: { gemini: number; kimi: number };
+    projection: { at1kResearchesUsd: number; at1kUsersMonthlyUsd: number };
   };
   /**
    * Product-image pipeline health. Two stages, because they fail differently:
@@ -134,14 +156,15 @@ function windowBounds(date: string, sinceMs?: number): { startIso: string; endIs
 
 function loadEvents(startIso: string, endIso: string): EventRow[] {
   const rows = getDb()
-    .prepare<[string, string], { name: string; props: string; received_at: string }>(
-      `SELECT name, props, received_at FROM telemetry_events
+    .prepare<[string, string], { name: string; props: string; received_at: string; device_id: string }>(
+      `SELECT name, props, received_at, device_id FROM telemetry_events
        WHERE received_at >= ? AND received_at < ?`,
     )
     .all(startIso, endIso);
   return rows.map((row) => ({
     name: row.name,
     receivedAt: row.received_at,
+    deviceId: row.device_id,
     props: safeParseProps(row.props),
   }));
 }
@@ -339,6 +362,62 @@ function buildProductImages(events: EventRow[]): DigestJson["productImages"] {
     harvestRate: round(ratio(hit, attempted)),
     renderFailures,
     displayRate: round(ratio(displayed, attempted)),
+  };
+}
+
+/**
+ * Unit economics from measured usage. This is the input to the business model:
+ * what one research costs, what one user costs, and which line item dominates.
+ *
+ * `researchesPerUser` is the lever that matters most — cost per user is cost
+ * per research times how many a user runs, and the second number is a product
+ * decision, not a pricing one.
+ */
+/** Sub-cent precision: a per-research cost of $0.11 rounds to nothing at 2dp. */
+function round6(n: number): number {
+  return Math.round(n * 1_000_000) / 1_000_000;
+}
+
+function buildCost(events: EventRow[]): DigestJson["cost"] {
+  const rows = events.filter((e) => e.name === "research_cost");
+  const usd = (e: EventRow): number => num(e.props, "totalUsd") ?? 0;
+  const totalUsd = rows.reduce((acc, e) => acc + usd(e), 0);
+  const reports = rows.length;
+
+  const byMode = new Map<string, { reports: number; usd: number }>();
+  for (const e of rows) {
+    const mode = str(e.props, "mode") ?? "unknown";
+    const prior = byMode.get(mode) ?? { reports: 0, usd: 0 };
+    byMode.set(mode, { reports: prior.reports + 1, usd: prior.usd + usd(e) });
+  }
+
+  const devices = new Set(rows.map((e) => e.deviceId));
+  const groundedRequests = rows.reduce((acc, e) => acc + (num(e.props, "groundedRequests") ?? 0), 0);
+  const groundingUsd = groundedRequests * GROUNDED_REQUEST_USD;
+  const perResearchUsd = ratio(totalUsd, reports);
+  const researchesPerUser = ratio(reports, devices.size);
+
+  return {
+    reports,
+    totalUsd: round6(totalUsd),
+    perResearchUsd: round6(perResearchUsd),
+    perResearchByMode: [...byMode.entries()]
+      .map(([mode, v]) => ({ mode, reports: v.reports, avgUsd: round6(ratio(v.usd, v.reports)) }))
+      .sort((a, b) => b.reports - a.reports),
+    activeDevices: devices.size,
+    perUserUsd: round6(ratio(totalUsd, devices.size)),
+    researchesPerUser: round(researchesPerUser),
+    groundedRequests,
+    groundingShareOfCost: round(ratio(groundingUsd, totalUsd)),
+    byProvider: {
+      gemini: round6(rows.reduce((acc, e) => acc + (num(e.props, "geminiUsd") ?? 0), 0)),
+      kimi: round6(rows.reduce((acc, e) => acc + (num(e.props, "kimiUsd") ?? 0), 0)),
+    },
+    projection: {
+      at1kResearchesUsd: round6(perResearchUsd * 1000),
+      // Assumes this window's researches-per-user holds — stated, not hidden.
+      at1kUsersMonthlyUsd: round6(perResearchUsd * researchesPerUser * 1000),
+    },
   };
 }
 
@@ -746,6 +825,26 @@ function renderMarkdown(json: DigestJson): string {
   push(`- Price watches set: ${g.priceWatchSet}`);
   push();
 
+  push("## Unit economics (estimated)");
+  push();
+  const c = json.cost;
+  if (c.reports === 0) {
+    push("_No costed research runs in this window._");
+  } else {
+    push(`- Researches costed: ${c.reports} across ${c.activeDevices} device(s)`);
+    push(`- **Cost per research: $${c.perResearchUsd.toFixed(4)}**`);
+    for (const m of c.perResearchByMode) {
+      push(`  - ${m.mode}: $${m.avgUsd.toFixed(4)} avg over ${m.reports} run(s)`);
+    }
+    push(`- **Cost per user: $${c.perUserUsd.toFixed(4)}** (${c.researchesPerUser} research/user)`);
+    push(`- Grounded search requests: ${c.groundedRequests} — ${(c.groundingShareOfCost * 100).toFixed(0)}% of total cost`);
+    push(`- By provider: Gemini $${c.byProvider.gemini.toFixed(4)} · Kimi $${c.byProvider.kimi.toFixed(4)}`);
+    push(`- Projection: **$${c.projection.at1kResearchesUsd.toFixed(2)} per 1,000 researches**; $${c.projection.at1kUsersMonthlyUsd.toFixed(2)} per 1,000 users at this window's usage rate`);
+    push();
+    push("_USD are estimates from an operator-maintained rate table (`src/shared/pricing.ts`), not billing data. Verify against the provider console before pricing decisions._");
+  }
+  push();
+
   push("## Product-image pipeline");
   push();
   const pi = json.productImages;
@@ -853,6 +952,7 @@ export function buildDigest(opts: BuildDigestOptions = {}): DigestArtifacts {
     flowAbandonment: buildFlowAbandonment(events),
     growth,
     productImages: buildProductImages(events),
+    cost: buildCost(events),
     evalSuite,
     scorecard: {
       rows: scorecardRows,

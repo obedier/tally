@@ -1,52 +1,55 @@
 # Tally nightly digest — 2026-07-29
 
 Window: 2026-07-29T00:00:00.000Z → 2026-07-30T00:00:00.000Z
-Total telemetry events: **30**
+Total telemetry events: **49**
 
 _Aggregates and anonymized exemplars only — no raw user data (per docs/LEARNING.md)._
 
 ## Event volume
 
-- `research_stage_completed` — 20
-- `report_completed` — 4
+- `research_stage_completed` — 32
+- `report_completed` — 6
 - `report_viewed` — 3
+- `product_image_harvested` — 3
+- `research_cost` — 2
 - `search_started` — 1
 - `research_abandoned` — 1
-- `product_image_harvested` — 1
+- `review_second_opinion` — 1
 
 ## Top categories
 
-- **home-goods** — 2 reports (50%)
-- **other** — 1 reports (25%)
-- **consumer-electronics** — 1 reports (25%)
+- **home-goods** — 4 reports (67%)
+- **other** — 1 reports (17%)
+- **consumer-electronics** — 1 reports (17%)
 
 ## Anonymized query exemplars
 
 _By category · query type (never raw query text)._
 
+- home-goods · need — 2
 - home-goods · sku — 1
 - other · sku — 1
 - consumer-electronics · sku — 1
-- home-goods · need — 1
+- home-goods · named-product — 1
 
 ## Failure & retry rates by stage
 
 | Stage | Attempts | Failures | Failure rate | Retries | Retry rate |
 |-------|---------:|---------:|-------------:|--------:|-----------:|
-| classify | 4 | 0 | 0.0% | 0 | 0% |
-| plan | 4 | 0 | 0.0% | 0 | 0% |
-| evidence-1 | 4 | 0 | 0.0% | 0 | 0% |
-| synthesize | 4 | 0 | 0.0% | 0 | 0% |
-| evidence-2 | 2 | 0 | 0.0% | 0 | 0% |
-| evidence-3 | 2 | 0 | 0.0% | 0 | 0% |
+| classify | 6 | 0 | 0.0% | 1 | 17% |
+| plan | 6 | 0 | 0.0% | 0 | 0% |
+| evidence-1 | 6 | 0 | 0.0% | 0 | 0% |
+| synthesize | 6 | 0 | 0.0% | 0 | 0% |
+| evidence-2 | 4 | 0 | 0.0% | 0 | 0% |
+| evidence-3 | 4 | 0 | 0.0% | 1 | 25% |
 
 ## Lowest-confidence report patterns
 
-Confidence distribution — high: 2, medium: 1, low: 1.
+Confidence distribution — high: 3, medium: 2, low: 1.
 Feedback — 👍 0 / 👎 0.
 
 Low/medium confidence by category:
-- home-goods — 1
+- home-goods — 2
 - consumer-electronics — 1
 
 ## Most user-edited assumptions & questions
@@ -67,12 +70,24 @@ Question edits: 0 (none).
 - Polls — created 0, voted 0, commented 0
 - Price watches set: 0
 
+## Unit economics (estimated)
+
+- Researches costed: 2 across 1 device(s)
+- **Cost per research: $0.1673**
+  - full: $0.1673 avg over 2 run(s)
+- **Cost per user: $0.3346** (2 research/user)
+- Grounded search requests: 6 — 63% of total cost
+- By provider: Gemini $0.3310 · Kimi $0.0036
+- Projection: **$167.32 per 1,000 researches**; $334.64 per 1,000 users at this window's usage rate
+
+_USD are estimates from an operator-maintained rate table (`src/shared/pricing.ts`), not billing data. Verify against the provider console before pricing decisions._
+
 ## Product-image pipeline
 
-- Harvest attempts: 1
-- Harvested: 0 (0%)
+- Harvest attempts: 3
+- Harvested: 2 (67%)
 - Failed to render in-browser: 0
-- **Actually shown to users: 0%**
+- **Actually shown to users: 67%**
 
 ## Eval-suite status
 
@@ -89,10 +104,10 @@ Computed engine metrics (day-over-day):
 
 | Metric | Value | Δ vs prev |
 |--------|------:|----------:|
-| reportsCompleted | 4 | -56 |
+| reportsCompleted | 6 | -54 |
 | reportFailureRate | 0 | -0.0625 |
-| reportTotalMsP75 | 63398 | -64506 |
-| avgSourceCount | 25.25 | -17.63 |
+| reportTotalMsP75 | 115059 | -12845 |
+| avgSourceCount | 46 | +3.12 |
 | evalPassRate | 1 | +0.0833 |
 | evalContractFailureRate | 0 | ±0 |
 | sharePageConversion | 0 | -0.3333 |
@@ -118,7 +133,7 @@ Scorecard targets (from docs/MILESTONES.md):
 
 1. **Many reports land below high confidence**
    - Signal: `report_completed.confidence`
-   - Evidence: 2/4 reports were low/medium confidence; worst in "home-goods" (1). Likely a sourcing or playbook gap.
+   - Evidence: 3/6 reports were low/medium confidence; worst in "home-goods" (2). Likely a sourcing or playbook gap.
 2. **Users abandon research at the "evidence-1" stage**
    - Signal: `research_abandoned`
    - Evidence: 1 abandonment at "evidence-1" (avg 6339ms elapsed before leaving).
