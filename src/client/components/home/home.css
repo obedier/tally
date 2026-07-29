@@ -17,13 +17,14 @@
 }
 
 .home__search {
-  position: relative;
   display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: 1fr auto auto;
+  align-items: stretch;
   height: 52px;
-  padding: 0 16px;
+  /* No right padding: the submit cap is flush with the pill's edge. `overflow`
+     is what clips it into the pill's semicircular end. */
+  padding-left: 18px;
+  overflow: hidden;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-pill);
   background: var(--color-card);
@@ -37,22 +38,9 @@
   outline-offset: 2px;
 }
 
-/* A filled green disc, not a grey hint — the search field is the one thing on
-   this screen the visitor must find, so it carries the brand colour. */
-.home__search-glass {
-  width: 34px;
-  height: 34px;
-  padding: 7px;
-  border-radius: 50%;
-  color: var(--color-on-green);
-  background: var(--color-green);
-  pointer-events: none;
-}
-
 .home__search input {
   min-width: 0;
   height: 100%;
-  padding-right: 44px;
   border: 0;
   background: transparent;
   font-size: var(--text-field);
@@ -71,27 +59,47 @@
   display: none;
 }
 
-.home__search-go {
-  position: absolute;
-  right: 6px;
-  top: 50%;
+/* Camera entry, inside the field. Quiet by default — scanning is the shortcut,
+   typing is still the main road. */
+.home__search-scan {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  color: var(--color-on-green);
-  background: transparent;
-  font-size: 1.1rem;
-  opacity: 0;
-  transform: translateY(-50%);
-  transition: opacity var(--duration-fast) var(--ease-out);
+  width: 44px;
+  color: var(--color-muted);
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
-.home__search-go--ready,
+.home__search-scan:hover,
+.home__search-scan:focus-visible {
+  color: var(--color-green);
+}
+
+.home__search-scan-icon {
+  width: 21px;
+  height: 21px;
+}
+
+/* The green cap: a solid half-round at the right edge of the pill. Full field
+   height, so it is a 50pt tap target and reads as the primary action. */
+.home__search-go {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  color: var(--color-on-green);
+  background: var(--color-green);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.home__search-go:hover,
 .home__search-go:focus-visible {
-  opacity: 1;
   background: var(--color-green-deep);
+}
+
+.home__search-glass {
+  width: 21px;
+  height: 21px;
+  pointer-events: none;
 }
 
 /* Small, and above the field rather than below it: depth is a setting, not a
@@ -252,13 +260,22 @@
 
 /* --- Optional location at search entry --- */
 
-.home__location-toggle {
+/* Right-justified under the field, so it hangs off the search box's right edge
+   rather than starting a second left-hand column of controls. */
+.home__location-row {
+  display: flex;
+  justify-content: flex-end;
   margin-top: var(--space-2);
+}
+
+.home__location-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0 4px var(--space-3);
   background: transparent;
   border: none;
-  padding: 0;
   color: var(--color-muted);
-  text-align: left;
 }
 
 .home__location-toggle:hover,
@@ -266,23 +283,34 @@
   color: var(--color-green);
 }
 
-.home__location {
-  margin-top: var(--space-3);
-  display: grid;
-  gap: var(--space-1);
-  max-width: 320px;
+.home__location-pin {
+  width: 13px;
+  height: 13px;
 }
 
-.home__location-label {
+.home__location {
+  margin-top: var(--space-3);
+  margin-left: auto;
+  display: grid;
+  gap: var(--space-1);
+  justify-items: end;
+  max-width: 320px;
+  text-align: right;
+}
+
+.home__location-label,
+.home__location-hint {
   color: var(--color-muted);
 }
 
 .home__location-input {
+  width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-sm);
   background: var(--color-card);
   font-size: var(--text-field);
+  text-align: right;
 }
 
 /* --- See-all link under recent research --- */

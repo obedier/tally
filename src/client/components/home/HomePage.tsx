@@ -2,8 +2,11 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { ResearchMode } from "../../../shared/report";
 import { track } from "../../lib/telemetry";
+import { scanQuery } from "../../lib/scan";
 import { Lockup, Spyglass } from "../ui/Lockup";
+import { MapPin, ScanTarget } from "../ui/icons";
 import { RecentResearch } from "./RecentResearch";
+import { ScanSheet } from "./ScanSheet";
 import "./home.css";
 
 /** Entry values a visitor→searcher CTA may carry in ?entry= (growth loop). */
@@ -35,8 +38,9 @@ export function HomePage() {
   // Optional coarse location for local prices — off until the user opens it.
   const [locationOpen, setLocationOpen] = useState(false);
   const [locationDraft, setLocationDraft] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
 
-  const startResearch = (query: string, entry: "home-search") => {
+  const startResearch = (query: string, entry: "home-search" | "scan") => {
     const trimmed = query.trim();
     if (!trimmed) return;
     // A CTA arrival attributes the conversion to that source, not the local action.
@@ -80,7 +84,6 @@ export function HomePage() {
           </div>
 
           <div className="home__search">
-            <Spyglass className="home__search-glass" />
             <input
               type="search"
               name="q"
@@ -92,18 +95,25 @@ export function HomePage() {
               enterKeyHint="search"
             />
             <button
-              type="submit"
-              className={`home__search-go${draft.trim() ? " home__search-go--ready" : ""}`}
-              aria-label="Start research"
+              type="button"
+              className="home__search-scan"
+              onClick={() => setScanOpen(true)}
+              aria-label="Scan a product barcode"
+              title="Scan a product barcode"
             >
-              <span aria-hidden="true">→</span>
+              <ScanTarget className="home__search-scan-icon" />
+            </button>
+            {/* The submit control is the green cap on the pill's right end — the
+                one obviously-tappable thing on the screen. */}
+            <button type="submit" className="home__search-go" aria-label="Start research">
+              <Spyglass className="home__search-glass" />
             </button>
           </div>
 
           {locationOpen ? (
             <div className="home__location">
               <label className="micro-copy home__location-label" htmlFor="home-location">
-                City or region for local prices
+                Location
               </label>
               <input
                 id="home-location"
@@ -112,21 +122,37 @@ export function HomePage() {
                 value={locationDraft}
                 onChange={(event) => setLocationDraft(event.target.value)}
                 placeholder="e.g. Seattle, WA"
+                aria-describedby="home-location-hint"
                 autoComplete="address-level2"
                 maxLength={120}
               />
+              <p id="home-location-hint" className="micro-copy home__location-hint">
+                City or region, used only to scope local prices.
+              </p>
             </div>
           ) : (
-            <button
-              type="button"
-              className="micro-copy home__location-toggle"
-              onClick={() => setLocationOpen(true)}
-            >
-              <span aria-hidden="true">◎</span> Set a location for local prices (optional)
-            </button>
+            <div className="home__location-row">
+              <button
+                type="button"
+                className="micro-copy home__location-toggle"
+                onClick={() => setLocationOpen(true)}
+              >
+                Location
+                <MapPin className="home__location-pin" />
+              </button>
+            </div>
           )}
         </form>
       </section>
+
+      <ScanSheet
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onCode={(code) => {
+          setScanOpen(false);
+          startResearch(scanQuery(code), "scan");
+        }}
+      />
 
       <div className="home__objects" aria-hidden="true">
         <img src="/product-images/catalog-vacuum.png" alt="" width="220" height="270" loading="eager" />

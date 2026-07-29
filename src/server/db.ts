@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
+import { isGtin } from "../shared/gtin";
 import { ReportSchema, type Report } from "../shared/report";
 import { TelemetryEventSchema } from "../shared/telemetry";
 
@@ -141,6 +142,23 @@ function containsPiiLikeText(value: string): boolean {
 }
 
 /**
+ * The one exemption to the phone heuristic: a scanned product barcode.
+ *
+ * A UPC/EAN is 12–14 digits, so PHONE_PATTERN (10+ digits) matches every one of
+ * them — barcode searches were rejected wholesale as suspected phone numbers,
+ * which would leave the scan feature with no telemetry at all. The exemption is
+ * kept as narrow as it can be: the search query, alone on the field, with a
+ * valid GTIN check digit (validated by the same shared function the scanner
+ * uses). The residual exposure is a 12–14-digit phone number that also happens
+ * to satisfy a GTIN checksum — roughly a 1-in-10 coincidence on top of an
+ * already-implausible one, and never a number formatted the way people write
+ * phone numbers.
+ */
+function isScannedProductCode(eventName: unknown, key: string, value: string): boolean {
+  return eventName === "search_started" && key === "query" && isGtin(value.trim());
+}
+
+/**
  * Lightweight PII guard over free-text body props (envelope excluded — those
  * are already format-constrained by schema). `query` on search_started is
  * allowed text per docs/LEARNING.md but still runs this guard.
@@ -148,7 +166,10 @@ function containsPiiLikeText(value: string): boolean {
 function findPiiInBodyProps(event: Record<string, unknown>): boolean {
   return Object.entries(event).some(
     ([key, value]) =>
-      !ENVELOPE_KEYS.has(key) && typeof value === "string" && containsPiiLikeText(value),
+      !ENVELOPE_KEYS.has(key) &&
+      typeof value === "string" &&
+      !isScannedProductCode(event.name, key, value) &&
+      containsPiiLikeText(value),
   );
 }
 

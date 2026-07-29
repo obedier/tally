@@ -291,6 +291,63 @@ describe("telemetry validation", () => {
     expect(result).toEqual({ accepted: 1, rejected: 0 });
   });
 
+  test("PII guard lets a scanned barcode query through — a UPC is not a phone number", () => {
+    // Every GTIN is 12+ digits, so the phone heuristic matched all of them and
+    // the scan feature silently emitted no telemetry at all.
+    const result = saveClientEvents([
+      {
+        ...envelope("evt_scan_upc"),
+        name: "search_started",
+        query: "012345678905",
+        mode: "full",
+        entry: "scan",
+      },
+    ]);
+    expect(result).toEqual({ accepted: 1, rejected: 0 });
+  });
+
+  test("the barcode exemption does not extend to a bad check digit", () => {
+    const result = saveClientEvents([
+      {
+        ...envelope("evt_scan_bad_check"),
+        name: "search_started",
+        query: "012345678906",
+        mode: "full",
+        entry: "scan",
+      },
+    ]);
+    expect(result).toEqual({ accepted: 0, rejected: 1 });
+    expect(readRejections().at(-1)?.reason).toBe("pii-suspected");
+  });
+
+  test("the barcode exemption does not extend to digits embedded in a sentence", () => {
+    const result = saveClientEvents([
+      {
+        ...envelope("evt_scan_embedded"),
+        name: "search_started",
+        query: "reach me on 012345678905 for the vacuum",
+        mode: "full",
+        entry: "scan",
+      },
+    ]);
+    expect(result).toEqual({ accepted: 0, rejected: 1 });
+    expect(readRejections().at(-1)?.reason).toBe("pii-suspected");
+  });
+
+  test("the barcode exemption does not extend to other events or other props", () => {
+    const result = saveClientEvents([
+      {
+        ...envelope("evt_scan_other_prop"),
+        name: "retailer_clicked",
+        reportId: "rep_1",
+        seller: "012345678905",
+        kind: "online",
+      },
+    ]);
+    expect(result).toEqual({ accepted: 0, rejected: 1 });
+    expect(readRejections().at(-1)?.reason).toBe("pii-suspected");
+  });
+
   test("rejected_events stores only id, reason, received_at — never the payload", () => {
     saveServerEvent({
       ...envelope("evt_pii_server"),

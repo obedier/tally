@@ -23,7 +23,8 @@ const searchStarted = z.object({
   name: z.literal("search_started"),
   query: z.string().min(1).max(500),
   mode: ResearchModeSchema,
-  entry: z.enum(["home-search", "example-chip", "history", "rerun", "share-cta", "poll"]),
+  /** "scan" = the query came from a barcode/SKU camera scan or its typed fallback. */
+  entry: z.enum(["home-search", "example-chip", "history", "rerun", "share-cta", "poll", "scan"]),
 });
 
 const researchStageCompleted = z.object({
