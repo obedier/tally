@@ -123,9 +123,12 @@ function kimiProvider(env: EngineEnv, apiKey: string): ResearchProvider {
       return {
         text: res.text,
         sources: res.sources.map((s) => ({ title: s.title, uri: s.uri })),
-        // Kimi bills search as tokens, not per request. Counting a grounded
-        // request here anyway would double-charge it in the cost ledger.
-        usage: { ...res.usage, groundedRequests: 0 },
+        // Moonshot charges $0.005 per executed $web_search IN ADDITION to
+        // billing the retrieved pages as input tokens. An earlier comment here
+        // claimed search was token-only and hardcoded 0, which understated the
+        // cost of every Kimi report. The per-call price is model-specific
+        // (pricing.ts), so this is a count, not a Google-grounding equivalent.
+        usage: { ...res.usage, groundedRequests: res.searchCalls },
         provider: "kimi",
       };
     },
@@ -141,7 +144,11 @@ function kimiProvider(env: EngineEnv, apiKey: string): ResearchProvider {
           // reasoning-token drain that was truncating output. Measured ~130s.
           reasoningEffort: "none",
           timeoutMs: Math.max(timeoutMs ?? 0, 240_000),
-          maxTokens: 8_000,
+          // Headroom for the k2.7 family, which REFUSES to disable reasoning
+          // (the client downgrades to "low"). Those reasoning tokens bill
+          // against max_tokens, so a budget sized for non-reasoning output
+          // truncated synthesis mid-JSON and forced a Gemini fallback.
+          maxTokens: 16_000,
         },
         (text) => parse(text),
       );

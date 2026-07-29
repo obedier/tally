@@ -458,6 +458,12 @@ export type KimiGroundedResult = {
   readonly text: string;
   readonly sources: readonly { title: string; uri: string }[];
   readonly usage: KimiUsage;
+  /**
+   * Number of `$web_search` calls Moonshot actually executed. Billed at
+   * KIMI_SEARCH_USD each, ON TOP of the retrieved pages counting as input
+   * tokens — so reporting this as 0 (as we did) understates every Kimi report.
+   */
+  readonly searchCalls: number;
 };
 
 /**
@@ -498,6 +504,8 @@ export async function callKimiGrounded(opts: KimiOptions): Promise<KimiGroundedR
   const startedAt = Date.now();
   let inputTokens = 0;
   let outputTokens = 0;
+  // Moonshot bills $web_search per executed call, so count them.
+  let searchCalls = 0;
   try {
     for (let hop = 0; hop < MAX_TOOL_HOPS; hop += 1) {
       // On the final hop the tools are withheld so the model MUST answer from
@@ -553,6 +561,7 @@ export async function callKimiGrounded(opts: KimiOptions): Promise<KimiGroundedR
       }
 
       if (out.finishReason === "tool_calls" && out.toolCalls.length > 0) {
+        searchCalls += out.toolCalls.length;
         messages.push({ role: "assistant", content: out.content, tool_calls: out.toolCalls });
         // Moonshot's builtin executes server-side; echoing the arguments back
         // is how the protocol asks us to acknowledge it.
@@ -590,7 +599,7 @@ export async function callKimiGrounded(opts: KimiOptions): Promise<KimiGroundedR
           `[kimi:debug] grounded answer had 0 sources; finish=${choice?.finish_reason} hop=${hop} len=${text.length}\n--- TAIL ---\n${text.slice(-700)}`,
         );
       }
-      return { text, sources, usage: { inputTokens, outputTokens } };
+      return { text, sources, usage: { inputTokens, outputTokens }, searchCalls };
     }
     throw new KimiError("upstream", "Kimi kept requesting tools past the hop limit", false, {
       inputTokens,

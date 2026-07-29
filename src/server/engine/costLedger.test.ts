@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createCostLedger } from "./costLedger";
-import { estimateCostUsd, GROUNDED_REQUEST_USD, rateFor, FALLBACK_RATE } from "../../shared/pricing";
+import { estimateCostUsd, GROUNDED_REQUEST_USD, KIMI_SEARCH_USD, rateFor, FALLBACK_RATE } from "../../shared/pricing";
 
 describe("estimateCostUsd", () => {
   it("prices tokens against the model's rate", () => {
@@ -34,6 +34,29 @@ describe("estimateCostUsd", () => {
       groundedRequests: 0,
     });
     expect(usd - tokensOnly).toBeGreaterThan(tokensOnly * 2);
+  });
+
+  it("prices a Kimi search at Moonshot's rate, not Google's", () => {
+    // Regression: search cost was global, so a Kimi search was priced at
+    // Google's $0.035 — 7x its real $0.005 — and separately the provider
+    // hardcoded groundedRequests to 0, billing it at nothing at all.
+    const usd = estimateCostUsd("kimi-k2.7-code-highspeed", {
+      inputTokens: 0,
+      outputTokens: 0,
+      groundedRequests: 2,
+    });
+    expect(usd).toBeCloseTo(2 * KIMI_SEARCH_USD, 6);
+    expect(usd).toBeLessThan(2 * GROUNDED_REQUEST_USD);
+  });
+
+  it("prices the highspeed variant at double the standard k2.7 rate", () => {
+    // "-highspeed" is the same model served faster for twice the money, and it
+    // is our default research model — pricing it as standard would understate
+    // every Kimi report.
+    const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000, groundedRequests: 0 };
+    const fast = estimateCostUsd("kimi-k2.7-code-highspeed", usage);
+    const standard = estimateCostUsd("kimi-k2.7-code", usage);
+    expect(fast).toBeCloseTo(standard * 2, 6);
   });
 
   it("falls back rather than pricing an unknown model at zero", () => {

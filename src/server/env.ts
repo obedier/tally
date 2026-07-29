@@ -45,23 +45,33 @@ export type ResearchProviderId = "kimi" | "gemini";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const DEFAULT_FAST_MODEL = "gemini-2.5-flash-lite";
 /**
- * k2.7-code-highspeed, not k2.6, and measured rather than assumed: on the real
- * grounded evidence prompt it returned the same sections and comparable
- * citations in 30.6s against k2.6's 393.6s (12.9x), taking an end-to-end quick
- * research from 442s to 74s. It also stopped the mid-answer drift into Chinese
- * that k2.6 exhibited. The "code" in the name is misleading for our use — the
- * grounded research and JSON stages are exactly what it is good at.
+ * The k2.7 family, not k2.6, and measured rather than assumed: on the real
+ * grounded evidence prompt k2.7 returned the same sections and comparable
+ * citations in 30.6s (highspeed) / 90s (standard) against k2.6's 393.6s, taking
+ * an end-to-end quick research from 442s to 74s. It also stopped the mid-answer
+ * drift into Chinese that k2.6 exhibited. The "code" in the name is misleading
+ * for our use — grounded research and JSON are exactly what it is good at.
+ *
+ * COST, measured against published rates 2026-07-29: standard k2.7-code is
+ * ~$0.081 per quick research; "-highspeed" is the SAME model served ~6x faster
+ * at DOUBLE the token price and lands at ~$0.158 — against Gemini's $0.058.
+ * So highspeed is 2.7x Gemini and standard 1.4x: the "Kimi is cheaper" premise
+ * does NOT survive the real rate card.
+ *
+ * Highspeed is nonetheless the default, because standard k2.7-code measured
+ * 372s end to end (evidence 243.8s) and truncated its synthesis — worse than
+ * Gemini on BOTH cost and latency, so its lower price buys nothing. Set
+ * KIMI_MODEL=kimi-k2.7-code only if latency stops mattering.
  *
  * Not kimi-k3: it emits a `$web_search` tool call and then rejects that same
  * call echoed back verbatim ("Invalid request: tokenization failed"), so it
  * cannot complete a grounded search loop at all. Verified against five
- * different echo shapes, streaming and not — it is a k3-side limitation, not
- * ours. k3 works fine for ungrounded JSON, which is not where the time goes.
+ * different echo shapes, streaming and not — a k3-side limitation, not ours.
+ * k3 works fine for ungrounded JSON, which is not where the time goes.
  *
  * Reasoning is NOT optional on this family (the API answers "only type=enabled
  * is allowed"); the client detects that from the rejection and adapts, so
- * changing this value to a model with different rules does not need a code
- * change.
+ * changing this value to a model with different rules needs no code change.
  */
 const DEFAULT_KIMI_MODEL = "kimi-k2.7-code-highspeed";
 /**

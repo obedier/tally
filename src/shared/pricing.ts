@@ -23,7 +23,17 @@ export type ModelRate = {
   readonly inputPerMtok: number;
   /** USD per million output tokens (reasoning tokens bill as output). */
   readonly outputPerMtok: number;
+  /**
+   * USD per grounded search call. Providers differ by 7x — Google Search
+   * grounding is billed per request, while Moonshot's `$web_search` charges
+   * $0.005 per call ON TOP of billing the retrieved pages as input tokens.
+   * Omitted means GROUNDED_REQUEST_USD (the Google rate).
+   */
+  readonly searchPerCall?: number;
 };
+
+/** Moonshot's published `$web_search` charge, separate from token billing. */
+export const KIMI_SEARCH_USD = 0.005;
 
 /**
  * Rates by model id. Unknown models fall back to FALLBACK_RATE rather than
@@ -34,8 +44,16 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
   "gemini-3.5-flash-lite": { inputPerMtok: 0.1, outputPerMtok: 0.4 },
   "gemini-2.5-flash": { inputPerMtok: 0.3, outputPerMtok: 2.5 },
   "gemini-2.5-flash-lite": { inputPerMtok: 0.1, outputPerMtok: 0.4 },
-  "kimi-k2.6": { inputPerMtok: 0.6, outputPerMtok: 2.5 },
-  "kimi-k2.7-code": { inputPerMtok: 0.6, outputPerMtok: 2.5 },
+  // Moonshot rates verified against published pricing 2026-07-29.
+  // NOTE: "-highspeed" is the SAME model served faster at DOUBLE the price.
+  // It is our default research model, so this is the rate that matters most —
+  // it was previously hitting FALLBACK_RATE and understating output by ~3.2x.
+  "kimi-k2.7-code-highspeed": { inputPerMtok: 1.9, outputPerMtok: 8.0, searchPerCall: KIMI_SEARCH_USD },
+  "kimi-k2.7-code": { inputPerMtok: 0.95, outputPerMtok: 4.0, searchPerCall: KIMI_SEARCH_USD },
+  // k2.6/k3 rates are less certain than the k2.7 pair; re-verify before basing
+  // a funding decision on them.
+  "kimi-k2.6": { inputPerMtok: 0.6, outputPerMtok: 2.5, searchPerCall: KIMI_SEARCH_USD },
+  "kimi-k3": { inputPerMtok: 3.0, outputPerMtok: 15.0, searchPerCall: KIMI_SEARCH_USD },
 };
 
 /** Used when a model id has no entry. Deliberately not zero. */
@@ -65,7 +83,7 @@ export function estimateCostUsd(model: string, usage: UsageTotals): number {
   const tokens =
     (Math.max(0, usage.inputTokens) / 1_000_000) * rate.inputPerMtok +
     (Math.max(0, usage.outputTokens) / 1_000_000) * rate.outputPerMtok;
-  const grounding = Math.max(0, usage.groundedRequests) * GROUNDED_REQUEST_USD;
+  const grounding = Math.max(0, usage.groundedRequests) * (rate.searchPerCall ?? GROUNDED_REQUEST_USD);
   return tokens + grounding;
 }
 
