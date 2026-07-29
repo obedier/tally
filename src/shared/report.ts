@@ -180,6 +180,25 @@ export const StageTimingSchema = z.object({
 });
 export type StageTiming = z.infer<typeof StageTimingSchema>;
 
+/**
+ * An independent second model's verdict on the review/feedback claims in this
+ * report. Gemini researches; a different provider judges what Gemini wrote.
+ *
+ * The point is honest uncertainty, not consensus theatre: agreement is weak
+ * evidence the review digest is grounded, and DISAGREEMENT is the valuable
+ * signal — it is surfaced to the reader rather than resolved silently. Null
+ * whenever no second provider is configured or reachable, which must read as
+ * "not checked", never as "checked and fine".
+ */
+export const SecondOpinionSchema = z.object({
+  provider: z.literal("kimi"),
+  model: z.string().min(1),
+  agrees: z.boolean(),
+  /** One sentence, the reviewer's own words. Bounded so it can't run long. */
+  note: z.string().min(1).max(300),
+});
+export type SecondOpinion = z.infer<typeof SecondOpinionSchema>;
+
 export const ReportMetaSchema = z.object({
   engineVersion: z.string().min(1),
   playbookId: z.string().min(1),
@@ -196,6 +215,11 @@ export const ReportMetaSchema = z.object({
     count: z.number().int().nonnegative(),
     classesRepresented: z.array(SourceClassSchema),
   }),
+  /**
+   * Second-provider cross-check of the review digest. Defaulted null so every
+   * report stored before this existed keeps validating.
+   */
+  reviewSecondOpinion: SecondOpinionSchema.nullable().default(null),
 });
 export type ReportMeta = z.infer<typeof ReportMetaSchema>;
 

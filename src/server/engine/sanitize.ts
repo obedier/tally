@@ -556,6 +556,7 @@ export function assembleReport(input: AssembleInput): Report {
       totalMs: input.meta.totalMs,
       disagreements,
       sourceDiversity: { count: sources.length, classesRepresented: classes },
+      reviewSecondOpinion: null,
     },
   };
   return ReportSchema.parse(report);

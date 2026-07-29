@@ -25,7 +25,8 @@ import {
   shouldStopDeepEvidence,
 } from "./controls";
 import { PROMPTS, promptVersions } from "./prompts";
-import { harvestImages, type ImageTask } from "./images";
+import { harvestImages, summarizeHarvest, type ImageTask } from "./images";
+import { auditReviewSummary } from "./reviewAudit";
 import { assembleReport, parsePrice, SanitizeError } from "./sanitize";
 import { domainFromChunk, usableChunks, type RawChunk } from "./sources";
 import { getReport, saveReport, saveServerEvent } from "../db";
@@ -671,9 +672,15 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
       .map((r) => r.url)
       .filter((u): u is string => typeof u === "string" && u.startsWith("http"));
   };
-  // Every cited page is a fallback candidate for every pick: the title gate in
-  // harvestImage refuses any page that doesn't name that product, so breadth
-  // costs nothing in correctness and is what gets alternatives a picture.
+  // Every cited page is a fallback candidate: the title gate in harvestImage
+  // refuses any page that doesn't name that product, so breadth costs nothing
+  // in correctness.
+  //
+  // Best fit ONLY. Alternatives were harvested for four picks each and returned
+  // an image 0% of the time in production (22/22 misses) — the pages that name
+  // a runner-up by title are roundups, and the title gate correctly refuses
+  // them. Harvesting them spent four fifths of the fetch budget to produce
+  // nothing, and the compare table reads fine without photos.
   const allSourceUrls = report.sources.map((s) => s.url);
   const sourceUrlsFor = (ids: readonly string[]): string[] =>
     ids.map((id) => sourceUrlById.get(id)).filter((u): u is string => u !== undefined);
@@ -688,11 +695,6 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
         ...allSourceUrls,
       ],
     },
-    ...report.alternatives.slice(0, 4).map((alt) => ({
-      key: `alt-${alt.rank}`,
-      name: alt.name,
-      urls: [...citedRetailerUrls(alt.name), ...allSourceUrls],
-    })),
   ].filter((task) => task.urls.length > 0);
   let finalReport = report;
   if (imageTasks.length > 0) {
@@ -704,17 +706,56 @@ async function execute(input: ResearchInput, emit: EmitFn, ctx: Ctx, t0: number)
     const withImages = {
       ...report,
       bestFit: { ...report.bestFit, imageUrl: images["bestFit"] ?? null },
-      alternatives: report.alternatives.map((alt) => ({
-        ...alt,
-        imageUrl: images[`alt-${alt.rank}`] ?? null,
-      })),
     };
     // A harvested URL must never break the validated contract — on any
     // mismatch the report ships without images rather than failing.
     const revalidated = ReportSchema.safeParse(withImages);
     finalReport = revalidated.success ? revalidated.data : report;
+    // The outcome is recorded, not inferred. Three rewrites of the harvester
+    // could not tell improvement from motion because a hit and a miss looked
+    // identical from outside; this is the number that gates the next attempt.
+    const outcome = summarizeHarvest(images);
+    recordServerEvent(ids, {
+      name: "product_image_harvested",
+      reportId: report.id,
+      attempted: outcome.attempted,
+      hit: outcome.hit,
+    });
     emit({ type: "stage", stage: "product-images", status: "completed", elapsedMs: elapsed() });
   }
+
+  // Second-opinion audit of the review digest, by a different provider that had
+  // no hand in writing it. Strictly additive: auditReviewSummary never throws
+  // and returns null when the provider is absent or unreachable, so a report is
+  // never delayed past its own budget or failed by a cross-check.
+  const bestFitRating = finalReport.bestFit.rating;
+  if (bestFitRating !== null) {
+    emit({ type: "stage", stage: "second-opinion", status: "started", elapsedMs: elapsed(), detail: "cross-checking reviews" });
+    const secondOpinion = await auditReviewSummary(
+      {
+        productName: finalReport.bestFit.name,
+        reviewSummary: bestFitRating.summary,
+        ratingValue: bestFitRating.value,
+        evidenceNotes,
+      },
+      { apiKey: env.kimiApiKey, model: env.kimiModel },
+    );
+    if (secondOpinion !== null) {
+      const withOpinion = ReportSchema.safeParse({
+        ...finalReport,
+        meta: { ...finalReport.meta, reviewSecondOpinion: secondOpinion },
+      });
+      if (withOpinion.success) finalReport = withOpinion.data;
+      recordServerEvent(ids, {
+        name: "review_second_opinion",
+        reportId: finalReport.id,
+        provider: secondOpinion.provider,
+        agrees: secondOpinion.agrees,
+      });
+    }
+    emit({ type: "stage", stage: "second-opinion", status: "completed", elapsedMs: elapsed() });
+  }
+
   const report2 = finalReport;
 
   emit({ type: "report", report: report2 });

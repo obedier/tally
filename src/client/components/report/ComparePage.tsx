@@ -155,6 +155,7 @@ function Comparison({ report }: { report: Report }) {
       <div className="compare__list" role="list" hidden={view === "table"}>
         <CompareCard
           role="listitem"
+          reportId={report.id}
           lead
           rank={1}
           name={bestFit.name}
@@ -171,6 +172,7 @@ function Comparison({ report }: { report: Report }) {
           <CompareCard
             key={`${alternative.rank}-${alternative.name}`}
             role="listitem"
+            reportId={report.id}
             keyAlternative={alternative.isKeyAlternative}
             rank={alternative.rank}
             name={alternative.name}
@@ -198,6 +200,8 @@ function Comparison({ report }: { report: Report }) {
 
 interface CompareCardProps {
   role: string;
+  /** Needed to attribute a render failure to the report it happened on. */
+  reportId: string;
   rank: number;
   name: string;
   ratingValue: number | null;
@@ -220,6 +224,7 @@ interface CompareCardProps {
  */
 function CompareCard({
   role,
+  reportId,
   rank,
   name,
   ratingValue,
@@ -244,7 +249,10 @@ function CompareCard({
           alt=""
           loading="lazy"
           referrerPolicy="no-referrer"
-          onError={(event) => event.currentTarget.remove()}
+          onError={(event) => {
+            event.currentTarget.remove();
+            track({ name: "product_image_failed", reportId, surface: "compare" });
+          }}
         />
       ) : null}
       <header className="compare-card__head">

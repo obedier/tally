@@ -95,6 +95,7 @@ function makeReport(id: string, createdAt: string, query = "best budget headphon
       totalMs: 5000,
       disagreements: [],
       sourceDiversity: { count: 12, classesRepresented: ["editorial", "retailer"] },
+      reviewSecondOpinion: null,
     },
   };
 }

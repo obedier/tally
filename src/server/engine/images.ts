@@ -3,9 +3,33 @@
  * og:image / twitter:image only, taken from cited source and retailer URLs —
  * honest provenance, never stock, never generated. Best-effort under hard time
  * budgets: a miss is null, never a substitute image.
+ *
+ *   candidate URLs (cited sources, retailer links — model-derived)
+ *          │
+ *          ▼
+ *   candidateUrls()      ✂ homepages (brand furniture) · search pages (no product)
+ *          │
+ *          ▼
+ *   fetchPage()          ✂ non-public hosts (SSRF) · non-HTML · 403 · 3s timeout
+ *          │               redirects followed MANUALLY, re-validated each hop
+ *          ▼
+ *   pageMatchesProduct() ✂ pages whose title doesn't identify THIS product
+ *          │               (model tokens all present + majority match)
+ *          ▼
+ *   JSON-LD Product image  ??  og:image     ✂ logos, banners, video thumbnails
+ *          │
+ *          ▼
+ *   imageUrl | null       ── outcome counted, never silently discarded
+ *
+ * Two filters in series (candidateUrls, pageMatchesProduct) are individually
+ * correct and jointly remove most of the supply — measured hit rate is ~24% on
+ * the best fit. That is why harvestImages reports an outcome: three rewrites of
+ * this file could not tell improvement from motion because nothing counted.
  */
 
 const FETCH_TIMEOUT_MS = 3000;
+/** Redirect hops followed by hand so every hop can be re-validated. */
+const MAX_REDIRECTS = 3;
 /**
  * Candidate pages tried per pick. Most retail fetches die instantly on a 403,
  * so a low cap mostly buys refusals; attempts run concurrently and share one
@@ -29,6 +53,55 @@ const OG_PATTERNS: readonly RegExp[] = [
  */
 const GENERIC_IMAGE_RE =
   /logo|brandmark|favicon|wordmark|sprite|placeholder|og[-_]?default|default[-_]?og|social[-_]?(default|share|card)|site[-_]?icon|banner[-_]?generic|walmartimages\.com\/dfw\/|ebaystatic\.com/i;
+
+/**
+ * Video thumbnails are a reviewer's face or a clickbait frame, not the product,
+ * and a review video's og:image passes every other check here. Two of these
+ * shipped as product photos before anyone counted image sources.
+ */
+const VIDEO_THUMB_RE =
+  /(^|\.)(ytimg\.com|vimeocdn\.com|tiktokcdn\.com|dailymotion\.com|jwpcdn\.com)$/i;
+
+export function isVideoThumbnail(url: string): boolean {
+  try {
+    return VIDEO_THUMB_RE.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hosts the server must never fetch. Candidate URLs originate in model output,
+ * so this is an SSRF boundary: without it a cited "source" pointing at
+ * 127.0.0.1 or a cloud metadata address would be fetched by the server.
+ *
+ * Honest limit: this checks the hostname, so a public name that RESOLVES to a
+ * private address still passes (DNS rebinding). Closing that needs resolution
+ * before connect; the bounded blast radius here — the response is parsed for
+ * og/JSON-LD and never returned to a client — doesn't justify it yet.
+ * Tracked in TODOS.md.
+ */
+const PRIVATE_HOST_RE =
+  /^(localhost|.*\.localhost|.*\.local|.*\.internal|metadata\.google\.internal)$/i;
+const PRIVATE_IPV4_RE =
+  /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+
+export function isPubliclyFetchable(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+  const host = u.hostname.toLowerCase();
+  if (PRIVATE_HOST_RE.test(host)) return false;
+  if (PRIVATE_IPV4_RE.test(host)) return false;
+  // IPv6 literals arrive bracket-stripped from URL.hostname.
+  if (host === "::1" || host === "::") return false;
+  if (/^(fe80|fc|fd)/i.test(host) && host.includes(":")) return false;
+  return true;
+}
 
 /**
  * A retailer HOMEPAGE's og:image is its brand image, never the product (a live
@@ -153,7 +226,7 @@ export function extractJsonLdProductImage(html: string, baseUrl: string): string
       const resolved = new URL(image, baseUrl);
       if (resolved.protocol !== "https:" && resolved.protocol !== "http:") continue;
       const asString = resolved.toString();
-      if (isLikelyGenericImage(asString)) continue;
+      if (isLikelyGenericImage(asString) || isVideoThumbnail(asString)) continue;
       return asString;
     } catch {
       continue;
@@ -209,7 +282,7 @@ export function extractOgImage(html: string, baseUrl: string): string | null {
       const resolved = new URL(raw, baseUrl);
       if (resolved.protocol !== "https:" && resolved.protocol !== "http:") continue;
       const asString = resolved.toString();
-      if (isLikelyGenericImage(asString)) continue;
+      if (isLikelyGenericImage(asString) || isVideoThumbnail(asString)) continue;
       return asString;
     } catch {
       continue;
@@ -218,20 +291,37 @@ export function extractOgImage(html: string, baseUrl: string): string | null {
   return null;
 }
 
+/**
+ * Fetches one cited page. Redirects are followed by hand rather than by the
+ * runtime: `redirect: "follow"` would let a public URL bounce the server into
+ * a private address, which is the whole failure this guard exists to prevent.
+ * The timeout spans every hop, so redirect chains can't extend the budget.
+ */
 async function fetchPage(url: string): Promise<{ html: string; finalUrl: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html,*/*" },
-    });
-    if (!res.ok) return null;
-    const type = res.headers.get("content-type") ?? "";
-    if (!type.includes("html")) return null;
-    const html = await res.text();
-    return { html, finalUrl: res.url || url };
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      if (!isPubliclyFetchable(current)) return null;
+      const res = await fetch(current, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: { "User-Agent": USER_AGENT, Accept: "text/html,*/*" },
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get("location");
+        if (location === null) return null;
+        current = new URL(location, current).toString();
+        continue;
+      }
+      if (!res.ok) return null;
+      const type = res.headers.get("content-type") ?? "";
+      if (!type.includes("html")) return null;
+      const html = await res.text();
+      return { html, finalUrl: current };
+    }
+    return null;
   } catch {
     return null;
   } finally {
@@ -278,6 +368,24 @@ export type ImageTask = {
   readonly name: string;
   readonly urls: readonly string[];
 };
+
+/** What a harvest run actually achieved. Reported, never inferred from a glance. */
+export type HarvestOutcome = {
+  readonly attempted: number;
+  readonly hit: number;
+};
+
+/**
+ * Turns a harvest result into the numbers the digest reports. Pure, so the
+ * metric that gates future work on this file can itself be tested.
+ */
+export function summarizeHarvest(results: Record<string, string | null>): HarvestOutcome {
+  const values = Object.values(results);
+  return {
+    attempted: values.length,
+    hit: values.filter((v) => v !== null).length,
+  };
+}
 
 /**
  * Resolves images for several picks concurrently under one overall budget.

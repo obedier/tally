@@ -88,6 +88,7 @@ function makeReport(id: string, overrides: ReportOverrides = {}): Report {
       totalMs: 5000,
       disagreements: [],
       sourceDiversity: { count: 12, classesRepresented: ["editorial", "retailer"] },
+      reviewSecondOpinion: null,
     },
   };
 }

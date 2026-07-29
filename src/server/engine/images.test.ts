@@ -1,5 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import {
+  isPubliclyFetchable,
+  isVideoThumbnail,
+  summarizeHarvest,
   candidateUrls,
   extractJsonLdProductImage,
   extractOgImage,
@@ -235,5 +238,82 @@ describe("pageMatchesProduct — identification, not mention", () => {
     const tokens = nameTokens("Lodge 6 quart enameled Dutch oven");
     expect(pageMatchesProduct(`<title>Lodge Enameled Dutch Oven Review</title>`, tokens)).toBe(true);
     expect(pageMatchesProduct(`<title>The best Dutch ovens of 2026</title>`, tokens)).toBe(false);
+  });
+});
+
+describe("isVideoThumbnail", () => {
+  it("rejects video-platform thumbnails posing as product photos", () => {
+    // Two of these shipped as product images before image sources were counted.
+    expect(isVideoThumbnail("https://i.ytimg.com/vi/abc123/maxresdefault.jpg")).toBe(true);
+    expect(isVideoThumbnail("https://i9.ytimg.com/vi/x/hq.jpg")).toBe(true);
+    expect(isVideoThumbnail("https://i.vimeocdn.com/video/12345_640.jpg")).toBe(true);
+  });
+
+  it("keeps real product CDNs", () => {
+    expect(isVideoThumbnail("https://i5.walmartimages.com/asr/abc.jpeg")).toBe(false);
+    expect(isVideoThumbnail("https://cdn.mos.cms.futurecdn.net/x.jpg")).toBe(false);
+  });
+
+  it("does not match a lookalike domain that merely contains the string", () => {
+    expect(isVideoThumbnail("https://notytimg.com.example.org/a.jpg")).toBe(false);
+  });
+
+  it("treats an unparseable URL as not a video thumbnail", () => {
+    expect(isVideoThumbnail("not a url")).toBe(false);
+  });
+});
+
+describe("isPubliclyFetchable", () => {
+  it("allows ordinary public pages", () => {
+    expect(isPubliclyFetchable("https://www.bobvila.com/reviews/vacuum")).toBe(true);
+    expect(isPubliclyFetchable("http://example.com/p/1")).toBe(true);
+  });
+
+  it("blocks loopback and localhost — candidate URLs come from model output", () => {
+    expect(isPubliclyFetchable("http://127.0.0.1:8787/api/health")).toBe(false);
+    expect(isPubliclyFetchable("http://localhost/")).toBe(false);
+    expect(isPubliclyFetchable("http://app.localhost/")).toBe(false);
+  });
+
+  it("blocks private and link-local ranges, including cloud metadata", () => {
+    expect(isPubliclyFetchable("http://169.254.169.254/latest/meta-data/")).toBe(false);
+    expect(isPubliclyFetchable("http://metadata.google.internal/")).toBe(false);
+    expect(isPubliclyFetchable("http://10.0.0.5/")).toBe(false);
+    expect(isPubliclyFetchable("http://192.168.1.1/")).toBe(false);
+    expect(isPubliclyFetchable("http://172.16.0.1/")).toBe(false);
+    expect(isPubliclyFetchable("http://172.31.255.1/")).toBe(false);
+  });
+
+  it("does not over-block public addresses that merely look adjacent", () => {
+    expect(isPubliclyFetchable("http://172.32.0.1/")).toBe(true);
+    expect(isPubliclyFetchable("http://11.0.0.1/")).toBe(true);
+  });
+
+  it("blocks non-http schemes outright", () => {
+    expect(isPubliclyFetchable("file:///etc/passwd")).toBe(false);
+    expect(isPubliclyFetchable("ftp://example.com/x")).toBe(false);
+    expect(isPubliclyFetchable("data:text/html,<h1>x")).toBe(false);
+  });
+
+  it("rejects an unparseable URL rather than defaulting to fetchable", () => {
+    expect(isPubliclyFetchable("http://")).toBe(false);
+  });
+});
+
+describe("summarizeHarvest", () => {
+  it("counts hits against attempts", () => {
+    expect(summarizeHarvest({ bestFit: "https://x/a.jpg" })).toEqual({ attempted: 1, hit: 1 });
+    expect(summarizeHarvest({ bestFit: null })).toEqual({ attempted: 1, hit: 0 });
+  });
+
+  it("reports a partial run honestly", () => {
+    expect(summarizeHarvest({ a: "https://x/1.jpg", b: null, c: "https://x/2.jpg" })).toEqual({
+      attempted: 3,
+      hit: 2,
+    });
+  });
+
+  it("handles a run with no tasks without dividing by zero downstream", () => {
+    expect(summarizeHarvest({})).toEqual({ attempted: 0, hit: 0 });
   });
 });

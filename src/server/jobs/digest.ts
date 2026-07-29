@@ -88,6 +88,18 @@ export interface DigestJson {
     polls: { created: number; voted: number; commented: number };
     priceWatchSet: number;
   };
+  /**
+   * Product-image pipeline health. Two stages, because they fail differently:
+   * `harvestRate` is what the server found, `displayRate` is what browsers
+   * actually rendered. The gap is hotlink refusals — invisible until measured.
+   */
+  productImages: {
+    attempted: number;
+    hit: number;
+    harvestRate: number;
+    renderFailures: number;
+    displayRate: number;
+  };
   evalSuite: {
     present: boolean;
     file: string | null;
@@ -303,6 +315,31 @@ function buildFlowAbandonment(events: EventRow[]): DigestJson["flowAbandonment"]
       avgElapsedMs: Math.round(elapsedList.reduce((a, b) => a + b, 0) / elapsedList.length),
     }))
     .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * The number that gates further work on the image harvester. It was rewritten
+ * three times with no measurement, so each pass could only judge itself by
+ * looking at one report. `displayRate` is the honest headline: a harvested
+ * image the browser refuses is worth exactly as much as no image at all.
+ */
+function buildProductImages(events: EventRow[]): DigestJson["productImages"] {
+  let attempted = 0;
+  let hit = 0;
+  for (const e of events) {
+    if (e.name !== "product_image_harvested") continue;
+    attempted += num(e.props, "attempted") ?? 0;
+    hit += num(e.props, "hit") ?? 0;
+  }
+  const renderFailures = events.filter((e) => e.name === "product_image_failed").length;
+  const displayed = Math.max(0, hit - renderFailures);
+  return {
+    attempted,
+    hit,
+    harvestRate: round(ratio(hit, attempted)),
+    renderFailures,
+    displayRate: round(ratio(displayed, attempted)),
+  };
 }
 
 function buildGrowth(byName: Record<string, number>): DigestJson["growth"] {
@@ -709,6 +746,19 @@ function renderMarkdown(json: DigestJson): string {
   push(`- Price watches set: ${g.priceWatchSet}`);
   push();
 
+  push("## Product-image pipeline");
+  push();
+  const pi = json.productImages;
+  if (pi.attempted === 0) {
+    push("_No image harvests recorded in this window._");
+  } else {
+    push(`- Harvest attempts: ${pi.attempted}`);
+    push(`- Harvested: ${pi.hit} (${(pi.harvestRate * 100).toFixed(0)}%)`);
+    push(`- Failed to render in-browser: ${pi.renderFailures}`);
+    push(`- **Actually shown to users: ${(pi.displayRate * 100).toFixed(0)}%**`);
+  }
+  push();
+
   push("## Eval-suite status");
   push();
   if (!json.evalSuite.present) {
@@ -802,6 +852,7 @@ export function buildDigest(opts: BuildDigestOptions = {}): DigestArtifacts {
     userEditedQuestions: buildUserEditedQuestions(events),
     flowAbandonment: buildFlowAbandonment(events),
     growth,
+    productImages: buildProductImages(events),
     evalSuite,
     scorecard: {
       rows: scorecardRows,

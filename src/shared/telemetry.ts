@@ -188,6 +188,44 @@ const priceWatchSet = z.object({
   rank: z.number().int().positive(),
 });
 
+/**
+ * Product-image harvest outcome, recorded server-side per report.
+ *
+ * This subsystem was rewritten three times without anyone able to say whether
+ * it improved, because a hit and a miss were indistinguishable from outside.
+ * `hit/attempted` is the falsifiable number the next attempt must beat.
+ */
+const productImageHarvested = z.object({
+  name: z.literal("product_image_harvested"),
+  reportId: z.string().min(1),
+  attempted: z.number().int().nonnegative(),
+  hit: z.number().int().nonnegative(),
+});
+
+/**
+ * A harvested image that failed to RENDER. Distinct from a harvest miss: the
+ * URL was found and stored, then the browser refused it — hotlink protection
+ * rejecting our no-referrer request, a 404, or a dead CDN. Without this event
+ * the harvest rate would look like the rate users actually see, and it isn't.
+ */
+const productImageFailed = z.object({
+  name: z.literal("product_image_failed"),
+  reportId: z.string().min(1),
+  surface: z.enum(["report", "compare"]),
+});
+
+/**
+ * A second provider's audit of the review digest. `agrees: false` is the
+ * valuable row — it marks reports where two independent models disagreed about
+ * what the evidence supports, which is a direct quality signal for the engine.
+ */
+const reviewSecondOpinion = z.object({
+  name: z.literal("review_second_opinion"),
+  reportId: z.string().min(1),
+  provider: z.literal("kimi"),
+  agrees: z.boolean(),
+});
+
 /** Thumbs up/down on a report — direct quality signal for query mining (M5). */
 const reportFeedback = z.object({
   name: z.literal("report_feedback"),
@@ -219,6 +257,9 @@ export const EventBodySchema = z.discriminatedUnion("name", [
   pollCommented,
   priceWatchSet,
   reportFeedback,
+  productImageHarvested,
+  productImageFailed,
+  reviewSecondOpinion,
 ]);
 export type EventBody = z.infer<typeof EventBodySchema>;
 

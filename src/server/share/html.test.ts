@@ -70,6 +70,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
       totalMs: 12000,
       disagreements: [],
       sourceDiversity: { count: 4, classesRepresented: ["editorial", "retailer"] },
+      reviewSecondOpinion: null,
     },
   };
   return ReportSchema.parse({ ...base, ...overrides });

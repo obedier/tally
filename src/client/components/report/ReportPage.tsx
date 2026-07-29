@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Assumption, Report, ResearchMode } from "../../../shared/report";
 import { buildResearchPath } from "../../lib/api";
 import { track } from "../../lib/telemetry";
+import { displayHost } from "../../lib/host";
 import { ErrorState, PageTop, ReportMissing } from "../ui/States";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { PriceWatchButton } from "./PriceWatchButton";
@@ -111,15 +112,34 @@ function ReportSummary({ report }: { report: Report }) {
             {bestFit.priceRange.display} <span aria-hidden="true">›</span>
           </Link>
         </div>
+        {/* Evidence, not a hero. The photo comes from a page this research
+            cited, so it is credited like any other citation — which is also why
+            its absence leaves no hole: the card never promised a picture.
+            Harvest lands on roughly a quarter of reports (see images.ts). */}
         {bestFit.imageUrl ? (
-          <img
-            className="report__product-img"
-            src={bestFit.imageUrl}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={(event) => event.currentTarget.remove()}
-          />
+          <figure className="report__product-figure">
+            <img
+              className="report__product-img"
+              src={bestFit.imageUrl}
+              alt=""
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              // A harvested image can still fail here: many CDNs reject our
+              // no-referrer hotlink. Removing it silently made the harvest rate
+              // look like the rate users see, which it never was.
+              onError={(event) => {
+                const figure = event.currentTarget.closest("figure");
+                if (figure !== null) figure.remove();
+                else event.currentTarget.remove();
+                track({ name: "product_image_failed", reportId: report.id, surface: "report" });
+              }}
+            />
+            {displayHost(bestFit.imageUrl) !== null ? (
+              <figcaption className="micro-copy report__product-credit">
+                Photo: {displayHost(bestFit.imageUrl)}
+              </figcaption>
+            ) : null}
+          </figure>
         ) : null}
         <h2 className="display display--title">{bestFit.name}</h2>
         {bestFit.rating ? (
@@ -132,6 +152,24 @@ function ReportSummary({ report }: { report: Report }) {
               <span className="report__rating-label">Reviews</span>
             )}{" "}
             {bestFit.rating.summary}
+          </p>
+        ) : null}
+        {/* A second model, from a different provider, audited the review digest
+            above. Disagreement is the point — it is shown, not resolved away.
+            Absent entirely when no audit ran, so silence never reads as
+            "checked and fine". */}
+        {report.meta.reviewSecondOpinion !== null ? (
+          <p
+            className={`micro-copy report__second-opinion${
+              report.meta.reviewSecondOpinion.agrees ? "" : " report__second-opinion--flag"
+            }`}
+          >
+            <strong>
+              {report.meta.reviewSecondOpinion.agrees
+                ? "Second model agrees:"
+                : "Second model disagrees:"}
+            </strong>{" "}
+            {report.meta.reviewSecondOpinion.note}
           </p>
         ) : null}
         <p className="body-copy report__why-best">{bestFit.whyBest}</p>
